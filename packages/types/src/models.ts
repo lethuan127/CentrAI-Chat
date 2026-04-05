@@ -102,3 +102,43 @@ export const publishedAgentSchema = z.object({
 });
 
 export type PublishedAgent = z.infer<typeof publishedAgentSchema>;
+
+// ─── Message Role ────────────────────────────────────────────
+
+export const MessageRole = {
+  USER: 'USER',
+  ASSISTANT: 'ASSISTANT',
+  SYSTEM: 'SYSTEM',
+} as const;
+
+export type MessageRole = (typeof MessageRole)[keyof typeof MessageRole];
+
+// ─── Conversation ────────────────────────────────────────────
+
+export const conversationSchema = z.object({
+  id: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  userId: z.string().uuid(),
+  agentId: z.string().uuid().nullable(),
+  modelId: z.string().nullable(),
+  providerId: z.string().nullable(),
+  title: z.string().nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export type Conversation = z.infer<typeof conversationSchema>;
+
+// ─── Message ─────────────────────────────────────────────────
+
+export const messageSchema = z.object({
+  id: z.string().uuid(),
+  conversationId: z.string().uuid(),
+  userId: z.string().uuid().nullable(),
+  role: z.enum(['USER', 'ASSISTANT', 'SYSTEM']),
+  content: z.string(),
+  tokenCount: z.number().int().nullable(),
+  createdAt: z.coerce.date(),
+});
+
+export type Message = z.infer<typeof messageSchema>;

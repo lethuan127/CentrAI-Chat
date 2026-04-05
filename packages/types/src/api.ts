@@ -54,9 +54,37 @@ export const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message cannot be empty').max(100_000),
   agentId: z.string().uuid().optional(),
   modelId: z.string().optional(),
+  providerId: z.string().optional(),
 });
 
 export type SendMessageDto = z.infer<typeof sendMessageSchema>;
+
+// ─── Conversation DTOs ───────────────────────────────────────
+
+export const createConversationSchema = z.object({
+  agentId: z.string().uuid().optional(),
+  modelId: z.string().optional(),
+  providerId: z.string().optional(),
+  title: z.string().max(200).optional(),
+});
+
+export type CreateConversationDto = z.infer<typeof createConversationSchema>;
+
+export const conversationQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+});
+
+export type ConversationQueryDto = z.infer<typeof conversationQuerySchema>;
+
+export const messageQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(50),
+  before: z.string().datetime().optional(),
+});
+
+export type MessageQueryDto = z.infer<typeof messageQuerySchema>;
 
 // ─── Agent DTOs ──────────────────────────────────────────────
 

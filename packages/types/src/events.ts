@@ -7,6 +7,7 @@ export const ChatStreamEventType = {
   DONE: 'done',
   ERROR: 'error',
   STOPPED: 'stopped',
+  CONVERSATION_CREATED: 'conversation_created',
 } as const;
 
 export type ChatStreamEventType =
@@ -60,8 +61,19 @@ export type ChatStoppedEvent = z.infer<typeof chatStoppedEventSchema>;
 
 // ─── Union Type ──────────────────────────────────────────────
 
+export const chatConversationCreatedEventSchema = z.object({
+  event: z.literal('conversation_created'),
+  data: z.object({
+    conversationId: z.string().uuid(),
+    title: z.string().nullable(),
+  }),
+});
+
+export type ChatConversationCreatedEvent = z.infer<typeof chatConversationCreatedEventSchema>;
+
 export type ChatStreamEvent =
   | ChatTokenEvent
   | ChatDoneEvent
   | ChatErrorEvent
-  | ChatStoppedEvent;
+  | ChatStoppedEvent
+  | ChatConversationCreatedEvent;

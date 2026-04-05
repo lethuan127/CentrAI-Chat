@@ -22,6 +22,12 @@ enum AuthProvider {
   GITHUB
 }
 
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
 // ─── Workspace (v1: single default, v2: multi-tenant) ──────
 
 model Workspace {
@@ -31,8 +37,9 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users  User[]
-  agents Agent[]
+  users         User[]
+  agents        Agent[]
+  conversations Conversation[]
 
   @@map("workspaces")
 }
@@ -60,6 +67,8 @@ model User {
   refreshTokens RefreshToken[]
   agents        Agent[]        @relation("AgentCreator")
   agentVersions AgentVersion[] @relation("AgentVersionCreator")
+  conversations Conversation[]
+  messages      Message[]
 
   @@unique([authProvider, oauthId])
   @@index([workspaceId])
@@ -117,7 +126,8 @@ model Agent {
   updatedAt                DateTime    @updatedAt
   deletedAt                DateTime?
 
-  versions AgentVersion[]
+  versions      AgentVersion[]
+  conversations Conversation[]
 
   @@index([workspaceId])
   @@index([status])
@@ -152,4 +162,48 @@ model AgentVersion {
   @@unique([agentId, version])
   @@index([agentId])
   @@map("agent_versions")
+}
+
+// ─── Conversation ────────────────────────────────────────────
+
+model Conversation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  agentId     String?
+  agent       Agent?    @relation(fields: [agentId], references: [id])
+  modelId     String?
+  providerId  String?
+  title       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  messages Message[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+// ─── Message ─────────────────────────────────────────────────
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?       @relation(fields: [userId], references: [id])
+  role           MessageRole
+  content        String      @db.Text
+  tokenCount     Int?
+  createdAt      DateTime    @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("messages")
 }

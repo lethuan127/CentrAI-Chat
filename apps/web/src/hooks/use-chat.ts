@@ -1,196 +1,147 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
-import type { ChatStreamEvent, SendMessageDto } from '@centrai/types';
+import { useChat as useAIChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import type { UIMessage } from 'ai';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { env } from '@/lib/env';
+import { apiClient } from '@/lib/api-client';
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  isStreaming?: boolean;
-}
+export type ChatMessage = UIMessage;
 
 interface UseChatOptions {
   agentId?: string;
   modelId?: string;
+  providerId?: string;
   conversationId?: string;
+  onConversationCreated?: (conversationId: string) => void;
 }
 
 interface UseChatReturn {
-  messages: ChatMessage[];
-  isStreaming: boolean;
-  error: string | null;
-  sendMessage: (content: string) => Promise<void>;
-  stopStreaming: () => Promise<void>;
+  messages: UIMessage[];
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
+  isLoadingHistory: boolean;
+  error: Error | undefined;
+  conversationId: string | null;
+  sendMessage: (text: string) => void;
+  stop: () => void;
   clearMessages: () => void;
+  loadConversation: (id: string) => Promise<void>;
+  setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const activeMessageIdRef = useRef<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(
+    options.conversationId ?? null,
+  );
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  const sendMessage = useCallback(
-    async (content: string) => {
-      if (isStreaming) return;
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
-      setError(null);
-      setIsStreaming(true);
-
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content,
-      };
-
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: '',
-        isStreaming: true,
-      };
-
-      setMessages((prev) => [...prev, userMessage, assistantMessage]);
-
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
-      try {
-        const token = localStorage.getItem('accessToken');
-        const body: SendMessageDto = {
-          content,
-          conversationId: options.conversationId,
-          agentId: options.agentId,
-          modelId: options.modelId,
-        };
-
-        const res = await fetch(`${env.apiUrl}/api/v1/chat/messages`, {
-          method: 'POST',
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `${env.apiUrl}/api/v1/chat/messages`,
+        prepareSendMessagesRequest: (reqOptions) => ({
+          ...reqOptions,
           headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...((typeof reqOptions.headers === 'object' && reqOptions.headers !== null)
+              ? reqOptions.headers
+              : {}),
+            Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : ''}`,
           },
-          body: JSON.stringify(body),
-          signal: abortController.signal,
-        });
-
-        const serverMessageId = res.headers.get('X-Message-Id');
-        if (serverMessageId) {
-          activeMessageIdRef.current = serverMessageId;
-        }
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(errorText || `HTTP ${res.status}`);
-        }
-
-        if (!res.body) {
-          throw new Error('Response body is empty');
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n\n');
-          buffer = lines.pop() ?? '';
-
-          for (const line of lines) {
-            const dataLine = line.trim();
-            if (!dataLine.startsWith('data: ')) continue;
-
-            const json = dataLine.slice(6);
-            const event = JSON.parse(json) as ChatStreamEvent;
-
-            switch (event.event) {
-              case 'token':
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessage.id
-                      ? { ...msg, content: msg.content + event.data.content }
-                      : msg,
-                  ),
-                );
-                break;
-
-              case 'done':
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessage.id
-                      ? { ...msg, id: event.data.messageId, isStreaming: false }
-                      : msg,
-                  ),
-                );
-                break;
-
-              case 'stopped':
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessage.id
-                      ? { ...msg, content: event.data.content, isStreaming: false }
-                      : msg,
-                  ),
-                );
-                break;
-
-              case 'error':
-                setError(event.data.message);
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMessage.id
-                      ? { ...msg, isStreaming: false }
-                      : msg,
-                  ),
-                );
-                break;
-            }
-          }
-        }
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-
-        const message = err instanceof Error ? err.message : 'Failed to send message';
-        setError(message);
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.isStreaming ? { ...msg, isStreaming: false } : msg,
-          ),
-        );
-      } finally {
-        setIsStreaming(false);
-        activeMessageIdRef.current = null;
-        abortControllerRef.current = null;
-      }
-    },
-    [isStreaming, options.conversationId, options.agentId, options.modelId],
+          body: {
+            ...(reqOptions.body ?? {}),
+            conversationId: conversationIdRef.current ?? undefined,
+            agentId: optionsRef.current.agentId ?? undefined,
+            modelId: optionsRef.current.modelId ?? undefined,
+            providerId: optionsRef.current.providerId ?? undefined,
+          },
+        }),
+      }),
+    [],
   );
 
-  const stopStreaming = useCallback(async () => {
-    const messageId = activeMessageIdRef.current;
-    if (messageId) {
-      const token = localStorage.getItem('accessToken');
-      await fetch(`${env.apiUrl}/api/v1/chat/messages/${messageId}/stop`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      }).catch(() => {});
+  const {
+    messages,
+    sendMessage: aiSendMessage,
+    status,
+    error,
+    stop,
+    setMessages,
+  } = useAIChat({
+    transport,
+    onData: (dataPart) => {
+      const data = dataPart as unknown as Record<string, unknown>;
+      const cid =
+        (data?.data as Record<string, unknown>)?.conversationId ??
+        data?.conversationId;
+      if (typeof cid === 'string' && cid !== conversationIdRef.current) {
+        setConversationId(cid);
+        optionsRef.current.onConversationCreated?.(cid);
+      }
+    },
+  });
+
+  const loadConversation = useCallback(
+    async (id: string) => {
+      setIsLoadingHistory(true);
+      try {
+        const res = await apiClient.get<
+          Array<{ id: string; role: string; content: string; createdAt: string }>
+        >(`/chat/conversations/${id}/messages?limit=100`);
+
+        const uiMessages: UIMessage[] = res.data.map((msg) => ({
+          id: msg.id,
+          role: msg.role.toLowerCase() as 'user' | 'assistant',
+          content: msg.content,
+          parts: [{ type: 'text' as const, text: msg.content }],
+          createdAt: new Date(msg.createdAt),
+        }));
+
+        setMessages(uiMessages);
+        setConversationId(id);
+      } catch {
+        // Fail silently — conversation sidebar can show the error state
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    },
+    [setMessages],
+  );
+
+  useEffect(() => {
+    if (options.conversationId && options.conversationId !== conversationIdRef.current) {
+      loadConversation(options.conversationId);
     }
-    abortControllerRef.current?.abort();
-  }, []);
+  }, [options.conversationId, loadConversation]);
+
+  const sendMessage = useCallback(
+    (text: string) => {
+      if (!text.trim()) return;
+      aiSendMessage({ text: text.trim() });
+    },
+    [aiSendMessage],
+  );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
-    setError(null);
-  }, []);
+    setConversationId(null);
+  }, [setMessages]);
 
-  return { messages, isStreaming, error, sendMessage, stopStreaming, clearMessages };
+  return {
+    messages,
+    status,
+    isLoadingHistory,
+    error,
+    conversationId,
+    sendMessage,
+    stop,
+    clearMessages,
+    loadConversation,
+    setMessages,
+  };
 }

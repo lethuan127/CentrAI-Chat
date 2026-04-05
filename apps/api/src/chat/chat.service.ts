@@ -1,98 +1,227 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { Response } from 'express';
-import type { ChatStreamEvent } from '@centrai/types';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { PrismaService } from '../prisma';
+import { ProviderService } from '../provider';
+import { MessageRole, AgentStatus } from '../generated/prisma/enums.js';
 
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
-  private readonly activeStreams = new Map<string, AbortController>();
 
-  async streamMessage(
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly providerService: ProviderService,
+  ) {}
+
+  async createConversation(
     userId: string,
-    dto: { conversationId?: string; content: string; agentId?: string; modelId?: string },
-    res: Response,
-  ): Promise<void> {
-    const messageId = crypto.randomUUID();
-    const abortController = new AbortController();
-    this.activeStreams.set(messageId, abortController);
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.setHeader('X-Message-Id', messageId);
-    res.flushHeaders();
-
-    const signal = abortController.signal;
-
-    try {
-      // TODO: Replace with real provider adapter call when Phase 5 is implemented.
-      // The placeholder below echoes back the user's content as streamed tokens.
-      const tokens = dto.content.split(' ');
-      let accumulated = '';
-
-      for (const token of tokens) {
-        if (signal.aborted) {
-          this.writeSSE(res, {
-            event: 'stopped',
-            data: { messageId, content: accumulated.trim() },
-          });
-          return;
-        }
-
-        const chunk = (accumulated ? ' ' : '') + token;
-        accumulated += chunk;
-
-        this.writeSSE(res, {
-          event: 'token',
-          data: { content: chunk },
-        });
-
-        await this.delay(50, signal);
-      }
-
-      // TODO: Persist assistant message to DB when Conversation/Message models exist (Phase 3.1)
-      this.writeSSE(res, {
-        event: 'done',
-        data: {
-          messageId,
-          usage: { promptTokens: tokens.length, completionTokens: tokens.length },
-        },
+    workspaceId: string,
+    options: { agentId?: string; modelId?: string; providerId?: string; title?: string },
+  ) {
+    if (options.agentId) {
+      const agent = await this.prisma.agent.findFirst({
+        where: { id: options.agentId, status: AgentStatus.PUBLISHED, deletedAt: null },
       });
-    } catch (error: unknown) {
-      if (signal.aborted) return;
-
-      const message = error instanceof Error ? error.message : 'Stream failed';
-      this.logger.error(`Stream error for message ${messageId}`, message);
-      this.writeSSE(res, {
-        event: 'error',
-        data: { code: 'STREAM_ERROR', message },
-      });
-    } finally {
-      this.activeStreams.delete(messageId);
-      res.end();
+      if (!agent) throw new NotFoundException('Published agent not found');
     }
-  }
 
-  stopStream(messageId: string): void {
-    const controller = this.activeStreams.get(messageId);
-    if (!controller) {
-      throw new NotFoundException(`No active stream for message ${messageId}`);
-    }
-    controller.abort();
-  }
-
-  private writeSSE(res: Response, event: ChatStreamEvent): void {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-  }
-
-  private delay(ms: number, signal: AbortSignal): Promise<void> {
-    return new Promise((resolve) => {
-      const timer = setTimeout(resolve, ms);
-      signal.addEventListener('abort', () => {
-        clearTimeout(timer);
-        resolve();
-      }, { once: true });
+    return this.prisma.conversation.create({
+      data: {
+        workspaceId,
+        userId,
+        agentId: options.agentId ?? null,
+        modelId: options.modelId ?? null,
+        providerId: options.providerId ?? null,
+        title: options.title ?? null,
+      },
     });
+  }
+
+  async listConversations(
+    userId: string,
+    query: { page: number; limit: number; search?: string },
+  ) {
+    const where: Record<string, unknown> = { userId, deletedAt: null };
+
+    if (query.search) {
+      where.OR = [{ title: { contains: query.search, mode: 'insensitive' } }];
+    }
+
+    const [conversations, total] = await Promise.all([
+      this.prisma.conversation.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        include: {
+          agent: { select: { id: true, name: true } },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { content: true, role: true, createdAt: true },
+          },
+        },
+      }),
+      this.prisma.conversation.count({ where }),
+    ]);
+
+    return {
+      items: conversations.map((c) => ({
+        id: c.id,
+        title: c.title,
+        agentId: c.agentId,
+        agentName: c.agent?.name ?? null,
+        modelId: c.modelId,
+        providerId: c.providerId,
+        lastMessage: c.messages[0] ?? null,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      })),
+      meta: {
+        total,
+        page: query.page,
+        limit: query.limit,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    };
+  }
+
+  async getConversation(conversationId: string, userId: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, deletedAt: null },
+      include: { agent: { select: { id: true, name: true } } },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+    return conversation;
+  }
+
+  async getMessages(
+    conversationId: string,
+    userId: string,
+    query: { page: number; limit: number },
+  ) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, deletedAt: null },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+
+    const [messages, total] = await Promise.all([
+      this.prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: 'asc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.prisma.message.count({ where: { conversationId } }),
+    ]);
+
+    return {
+      items: messages,
+      meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
+    };
+  }
+
+  async deleteConversation(conversationId: string, userId: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, deletedAt: null },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  async updateConversationTitle(conversationId: string, userId: string, title: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, deletedAt: null },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { title },
+    });
+  }
+
+  async ensureConversation(
+    userId: string,
+    workspaceId: string,
+    dto: { conversationId?: string; agentId?: string; modelId?: string; providerId?: string },
+  ): Promise<{ conversationId: string; isNew: boolean }> {
+    if (dto.conversationId) {
+      const conversation = await this.prisma.conversation.findFirst({
+        where: { id: dto.conversationId, deletedAt: null },
+      });
+      if (!conversation) throw new NotFoundException('Conversation not found');
+      if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+      return { conversationId: dto.conversationId, isNew: false };
+    }
+
+    const conversation = await this.createConversation(userId, workspaceId, {
+      agentId: dto.agentId,
+      modelId: dto.modelId,
+      providerId: dto.providerId,
+    });
+    return { conversationId: conversation.id, isNew: true };
+  }
+
+  async persistUserMessage(conversationId: string, userId: string, content: string) {
+    return this.prisma.message.create({
+      data: { conversationId, userId, role: MessageRole.USER, content },
+    });
+  }
+
+  async persistAssistantMessage(conversationId: string, content: string, tokenCount?: number) {
+    const message = await this.prisma.message.create({
+      data: {
+        conversationId,
+        role: MessageRole.ASSISTANT,
+        content,
+        tokenCount: tokenCount ?? null,
+      },
+    });
+
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() },
+    });
+
+    return message;
+  }
+
+  async getConversationHistory(conversationId: string) {
+    return this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+      select: { role: true, content: true },
+      take: 50,
+    });
+  }
+
+  generateTitleAsync(conversationId: string): void {
+    this.prisma.message
+      .findMany({
+        where: { conversationId },
+        orderBy: { createdAt: 'asc' },
+        take: 4,
+        select: { role: true, content: true },
+      })
+      .then((messages) => this.providerService.generateTitle(messages))
+      .then(async (title) => {
+        if (title && title !== 'New Conversation') {
+          await this.prisma.conversation.update({
+            where: { id: conversationId },
+            data: { title },
+          });
+        }
+      })
+      .catch((err: Error) => {
+        this.logger.warn(`Auto-title generation failed: ${err.message}`);
+      });
   }
 }
