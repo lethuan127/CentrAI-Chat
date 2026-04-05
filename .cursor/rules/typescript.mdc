@@ -1,0 +1,55 @@
+---
+description: TypeScript coding standards for the CentrAI-Chat monorepo
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript Standards
+
+## Strict Mode
+
+- `strict: true` in all tsconfigs. No `any` — use `unknown` with type guards.
+- Prefer `interface` for object shapes, `type` for unions/intersections/utilities.
+- Shared types live in `packages/types/`, never duplicated across apps.
+
+## Naming
+
+- `.ts` files: `kebab-case` (e.g., `chat-service.ts`, `use-chat.ts`, `create-agent.dto.ts`)
+- `.tsx` component files: `PascalCase` (e.g., `MessageBubble.tsx`, `AgentCard.tsx`)
+- Classes/interfaces: `PascalCase`
+- Functions/variables: `camelCase`
+- Constants: `UPPER_SNAKE_CASE`
+- Enums: `PascalCase` name, `UPPER_SNAKE_CASE` members (matches Prisma-generated enums)
+
+## Imports
+
+- Use path aliases (`@centrai/types`, `@centrai/ui`, `@/lib`, `@/components`).
+- No relative imports that go up more than one level (`../../` max).
+- Barrel exports (`index.ts`) in each module/package — import from barrel, not internal files.
+
+## Error Handling
+
+```typescript
+// ❌ Silent catch
+try { await fetchData(); } catch (e) {}
+
+// ✅ Log + rethrow typed error
+try {
+  await fetchData();
+} catch (error) {
+  this.logger.error('Failed to fetch data', { error });
+  throw new AppError('DATA_FETCH_FAILED', { cause: error });
+}
+```
+
+## Functions
+
+- Prefer named exports over default exports.
+- Max one class per file. Pure utility functions can share a file.
+- Use `readonly` for properties that shouldn't be reassigned.
+
+## Validation
+
+- Use Zod schemas (in `packages/types/`) for runtime validation.
+- Derive TypeScript types from Zod with `z.infer<typeof Schema>`.
+- Never trust external input — validate at API boundaries.

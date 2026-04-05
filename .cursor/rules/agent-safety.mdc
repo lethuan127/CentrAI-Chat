@@ -1,0 +1,37 @@
+---
+description: Safety boundaries for AI agent behavior in this codebase
+alwaysApply: true
+---
+
+# Agent Safety Rules
+
+## Verification Before Action
+
+- Before importing a package, verify it's installed: check `package.json` or run `pnpm list <package>`.
+- Before using a framework API, confirm the version. This project uses Next.js (App Router), NestJS, Prisma.
+- Never assume a file or function exists — search or read first.
+
+## Code Quality
+
+- Never leave placeholder code (`// TODO: implement`, `// ...rest of the code`). Implement fully or explain why you can't.
+- Never generate fake data, mock API keys, or dummy credentials in committed code.
+- Never silence errors with empty catch blocks.
+
+## Security
+
+- Never commit `.env` files, API keys, or secrets.
+- Never delete config files (`package.json`, `tsconfig.json`, `prisma/schema.prisma`, `docker-compose.yml`) without confirmation.
+- Always encrypt sensitive fields (API keys, tokens) before storing in the database.
+- End-user endpoints must never expose agent system prompts or admin-only data.
+
+## Git Discipline
+
+- Don't commit unless asked. Don't push unless asked.
+- Don't amend commits that have been pushed.
+- Write clear commit messages describing the "why", not the "what".
+
+## Architecture Decisions
+
+- Read `docs/SCOPE.md`, `docs/ARCHITECTURE.md`, and `docs/MVP.md` before proposing structural changes.
+- Don't introduce new dependencies without justification. Prefer what's already in the stack.
+- Respect the persona split: admin features in `(admin)/` routes, user features in `(dashboard)/` routes.

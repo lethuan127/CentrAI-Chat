@@ -1,0 +1,116 @@
+---
+description: Testing conventions for the CentrAI-Chat monorepo
+globs: "**/*.{spec,test,e2e-spec}.ts"
+alwaysApply: false
+---
+
+# Testing Conventions
+
+## Stack
+
+- **API unit/integration**: Jest + `@nestjs/testing` (in `apps/api/`)
+- **Packages**: Vitest (in `packages/*/`)
+- **E2E**: Jest + Supertest for API, Playwright for web (future)
+
+## File Naming & Location
+
+- Unit tests: `*.spec.ts` co-located next to the source file
+- E2E tests: `*.e2e-spec.ts` in `apps/api/test/`
+- Test helpers: `apps/api/test/helpers/` or `packages/*/test/`
+
+```
+apps/api/src/agent/
+├── agent.service.ts
+├── agent.service.spec.ts      ← unit test lives next to source
+├── agent.controller.ts
+└── agent.controller.spec.ts
+apps/api/test/
+├── agent.e2e-spec.ts          ← e2e test
+└── helpers/
+    └── test-app.ts            ← shared e2e bootstrap
+```
+
+## Unit Test Structure
+
+Use **Arrange-Act-Assert** with descriptive `describe`/`it` blocks:
+
+```typescript
+// ✅ Good: focused test with proper mocking
+describe('AgentService', () => {
+  let service: AgentService;
+  let prisma: DeepMockProxy<PrismaClient>;
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        AgentService,
+        { provide: PrismaService, useValue: mockDeep<PrismaClient>() },
+      ],
+    }).compile();
+
+    service = module.get(AgentService);
+    prisma = module.get(PrismaService);
+  });
+
+  describe('create', () => {
+    it('should create a draft agent with workspaceId', async () => {
+      const dto = { name: 'Test', systemPrompt: 'You are helpful' };
+      prisma.agent.create.mockResolvedValue(mockAgent);
+
+      const result = await service.create('user-1', dto);
+
+      expect(prisma.agent.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'DRAFT' }) }),
+      );
+      expect(result.status).toBe('DRAFT');
+    });
+  });
+});
+```
+
+## Mocking Rules
+
+- Mock Prisma with `jest-mock-extended` (`mockDeep<PrismaClient>()`). Never use a real DB in unit tests.
+- Mock external services (LLM providers, Redis) at the adapter boundary.
+- Use `ConfigService` mock for env values — never set `process.env` directly in tests.
+- Mock guards in controller tests to isolate HTTP layer from auth.
+
+```typescript
+// ❌ Bad: real DB, process.env mutation, no cleanup
+process.env.JWT_SECRET = 'test';
+const result = await prisma.agent.findMany();
+
+// ✅ Good: mocked dependencies, deterministic
+const configService = { get: jest.fn().mockReturnValue('test-secret') };
+prisma.agent.findMany.mockResolvedValue([mockAgent]);
+```
+
+## What to Test
+
+| Layer | Test | Don't test |
+|-------|------|-----------|
+| **Service** | Business logic, validation, state transitions, error paths | Prisma query internals |
+| **Controller** | Route binding, status codes, RBAC guard presence, response envelope | Business logic (delegate to service) |
+| **Guard** | Role checking logic, token validation | Framework internals |
+| **Adapter** | Request/response mapping, error normalization | External API availability |
+
+## E2E Tests
+
+- Bootstrap a real NestJS app with `Test.createTestingModule` + `app.init()`.
+- Use an isolated test database (separate `DATABASE_URL` in `.env.test`).
+- Seed minimal data per test, clean up after.
+- Test full request/response cycle including auth, validation, and response envelope.
+
+## Assertions
+
+- Prefer specific matchers: `toEqual`, `toContain`, `toThrow` over `toBeTruthy`.
+- Assert on the **shape** of responses, not exact timestamps or UUIDs.
+- Use `expect.objectContaining()` and `expect.any(String)` for partial matching.
+
+## Anti-Patterns
+
+- No `any` in test code — type the mocks.
+- No `// @ts-ignore` or `// @ts-expect-error` to bypass mocks — fix the types.
+- No snapshot tests for API responses — they break on every field addition.
+- No testing implementation details (private methods, internal state).
+- No `sleep()` or timing-based assertions — mock timers if needed.

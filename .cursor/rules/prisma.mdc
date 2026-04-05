@@ -1,0 +1,52 @@
+---
+description: Prisma schema and database conventions
+globs: "**/*.prisma"
+alwaysApply: false
+---
+
+# Prisma Conventions
+
+## Schema
+
+- Single schema file at `apps/api/prisma/schema.prisma`.
+- Every model has `id` (UUID, `@default(uuid())`), `createdAt`, `updatedAt`.
+- Every model has `workspaceId` FK (for v2 multi-tenancy). v1 uses single default workspace.
+- Soft delete via `deletedAt DateTime?` — never hard-delete user data.
+
+```prisma
+model Agent {
+  id          String      @id @default(uuid())
+  workspaceId String
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
+  name        String
+  status      AgentStatus @default(DRAFT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+}
+
+enum AgentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+```
+
+## Naming
+
+- Models: `PascalCase` singular (`User`, `Agent`, `Conversation`).
+- Fields: `camelCase`.
+- Enums: `PascalCase` with `UPPER_SNAKE_CASE` values.
+- Relations: named explicitly to avoid ambiguity.
+
+## Migrations
+
+- Always use `prisma migrate dev` for development, `prisma migrate deploy` for production.
+- Never use `db push` or `synchronize: true` in production.
+- Migration names should be descriptive: `add-agent-status-field`, not `migration-1`.
+
+## Security
+
+- API keys and secrets: encrypt before storing (AES-256). Never store plaintext.
+- Password hashes: argon2. The `passwordHash` field is never selected in queries by default.
+- Use `@db.Text` for large fields (system prompts, message content).

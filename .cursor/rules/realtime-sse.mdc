@@ -1,0 +1,64 @@
+---
+description: SSE streaming conventions for realtime chat
+globs: "apps/api/src/chat/**/*.ts,apps/web/src/hooks/use-chat*"
+alwaysApply: false
+---
+
+# Realtime SSE Conventions
+
+## Why SSE, Not WebSocket
+
+CentrAI-Chat uses SSE for streaming because the chat pattern is unidirectional: user sends a message (HTTP POST), server streams tokens back (SSE). This matches how LLM providers (OpenAI, Anthropic, Gemini) stream natively. No extra dependencies, no sticky sessions, no Socket.IO.
+
+## API Pattern
+
+The chat endpoint `POST /api/v1/chat/messages` returns an SSE stream:
+
+```typescript
+res.setHeader('Content-Type', 'text/event-stream');
+res.setHeader('Cache-Control', 'no-cache');
+res.setHeader('Connection', 'keep-alive');
+res.setHeader('X-Accel-Buffering', 'no');
+```
+
+Each event is a JSON object on a `data:` line, double-newline terminated:
+
+```
+data: {"event":"token","data":{"content":"Hello"}}\n\n
+data: {"event":"done","data":{"messageId":"...","usage":{...}}}\n\n
+```
+
+## Event Types
+
+All defined in `packages/types/src/events.ts`:
+
+| Event | When | Payload |
+|-------|------|---------|
+| `token` | Each streamed token | `{ content: string }` |
+| `done` | Stream complete | `{ messageId, usage? }` |
+| `error` | Provider or internal error | `{ code, message }` |
+| `stopped` | User cancelled | `{ messageId, content }` |
+
+## Cancellation
+
+- Server tracks active streams by message ID via `AbortController`
+- `POST /api/v1/chat/messages/:id/stop` triggers abort
+- Client receives a `stopped` event with accumulated content
+
+## Client Pattern
+
+Use `fetch()` + `ReadableStream` (not `EventSource`) because we need POST + auth headers:
+
+```typescript
+const res = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body });
+const reader = res.body.getReader();
+// Parse SSE lines from chunks
+```
+
+## Rules
+
+- Never use `EventSource` for chat (it only supports GET, no auth headers).
+- Always set `X-Accel-Buffering: no` to prevent nginx from buffering SSE.
+- Always send `X-Message-Id` header so clients can call the stop endpoint.
+- Event payloads must match the Zod schemas in `@centrai/types/events.ts`.
+- Flush headers immediately after setting SSE headers (`res.flushHeaders()`).

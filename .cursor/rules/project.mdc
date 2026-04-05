@@ -1,0 +1,53 @@
+---
+description: CentrAI-Chat project overview, architecture, and conventions. Always active.
+alwaysApply: true
+---
+
+# CentrAI-Chat Project Context
+
+## What This Is
+
+CentrAI-Chat is an open-source centralized AI conversation platform. Two personas:
+
+- **End User** — chats with published agents or admin-enabled LLM models. No access to agent internals or admin UI.
+- **Admin / Developer** — creates agents, configures providers, manages users. Superset of end-user capabilities.
+
+## Architecture
+
+- **Monorepo**: Turborepo + pnpm workspaces
+- **Frontend**: Next.js (App Router) in `apps/web/`
+- **Backend API**: NestJS in `apps/api/`
+- **Worker**: BullMQ job processor in `apps/worker/`
+- **Shared packages**: `packages/ui`, `packages/sdk`, `packages/config`, `packages/types`
+- **Database**: PostgreSQL + Prisma ORM
+- **Queue/Cache**: Redis + BullMQ
+- **Realtime**: SSE (Server-Sent Events) over HTTP streaming
+
+## Key Domain Concepts
+
+- **Agent**: admin-created config (system prompt + model + tools). Status: `draft` → `published` → `archived`. End users only see `published`.
+- **Provider**: LLM backend (OpenAI, Anthropic, Gemini, Ollama). All normalized behind OpenAI-compatible adapter.
+- **Conversation**: belongs to a user. Contains messages. Scoped to a workspace (single default in v1).
+- **Workspace**: all entities have `workspaceId` FK. v1 uses single default workspace; multi-tenancy in v2.
+
+## RBAC Roles (v1)
+
+| Role | Access |
+|------|--------|
+| `admin` | Everything: users, providers, agents, settings, dashboard |
+| `developer` | Agent CRUD + chat. No user management or system settings |
+| `user` | Chat with published agents and enabled models only |
+
+## Route Layout
+
+- `(auth)/` — login, register, password reset (public)
+- `(dashboard)/` — end-user shell: `chat/`, `settings/`
+- `(admin)/` — admin shell (RBAC-gated): `agents/`, `providers/`, `users/`, `analytics/`, `audit/`, `settings/`
+
+## Documentation
+
+Read these before making architectural decisions:
+
+- `docs/SCOPE.md` — platform scopes, role matrix, v1 features, future roadmap
+- `docs/ARCHITECTURE.md` — tech stack, module design, data flows, project structure
+- `docs/MVP.md` — 8-phase plan with deliverables and acceptance criteria

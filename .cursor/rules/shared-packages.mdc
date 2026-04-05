@@ -1,0 +1,51 @@
+---
+description: Shared package conventions for packages/*
+globs: "packages/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Shared Package Conventions
+
+## Package Scopes
+
+| Package | NPM Name | Purpose |
+|---------|----------|---------|
+| `packages/types` | `@centrai/types` | Domain types, Zod schemas, DTOs, event payloads |
+| `packages/ui` | `@centrai/ui` | React component library (shadcn/ui based) |
+| `packages/sdk` | `@centrai/sdk` | TypeScript API client for CentrAI |
+| `packages/config` | `@centrai/config` | Shared ESLint, tsconfig, Prettier presets |
+
+## Rules
+
+- Packages must be **app-agnostic**. No imports from `apps/web` or `apps/api`.
+- Every package has a barrel `src/index.ts` exporting its public API.
+- Keep dependencies minimal — packages should not pull in heavy framework deps.
+
+## @centrai/types
+
+- Define Zod schemas first, derive TypeScript types with `z.infer<>`.
+- Separate files: `api.ts` (DTOs), `models.ts` (domain entities), `events.ts` (WS/queue payloads).
+- Types used by both frontend and backend go here. App-specific types stay in the app.
+
+```typescript
+// ✅ Schema-first approach
+export const createAgentSchema = z.object({
+  name: z.string().min(1).max(100),
+  systemPrompt: z.string().min(1),
+  modelId: z.string().uuid(),
+});
+export type CreateAgentDto = z.infer<typeof createAgentSchema>;
+```
+
+## @centrai/ui
+
+- Built on shadcn/ui. Export primitives from `primitives/` and composed components from `compositions/`.
+- All components accept `className` prop for Tailwind overrides via `cn()`.
+- Include dark mode support via CSS variables in `theme/`.
+- No data fetching or business logic in UI components — props in, JSX out.
+
+## @centrai/sdk
+
+- Auto-generated from OpenAPI spec when possible.
+- Typed methods per resource: `sdk.agents.list()`, `sdk.conversations.create()`.
+- Support both `fetch` and streaming (WebSocket/SSE) transports.

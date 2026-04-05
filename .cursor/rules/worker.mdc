@@ -1,0 +1,42 @@
+---
+description: BullMQ worker and job conventions for apps/worker
+globs: "apps/worker/**/*.ts"
+alwaysApply: false
+---
+
+# Worker Conventions
+
+## Structure
+
+- Each job type gets its own file: `jobs/llm-completion.job.ts`, `jobs/audit-write.job.ts`.
+- Queue definitions in `queues/` — one queue per job category.
+- Jobs are pure functions: take payload → do work → return result. No HTTP or WebSocket.
+
+## Job Design
+
+```typescript
+// ✅ Job processor pattern
+export const processLlmCompletion = async (job: Job<LlmCompletionPayload>) => {
+  const { conversationId, messages, providerId } = job.data;
+  // ... process and publish result to Redis pub/sub
+};
+```
+
+- Jobs must be **idempotent** — safe to retry on failure.
+- Include all needed data in the job payload. Don't rely on external state that may change.
+- Set `attempts` and `backoff` strategy on every queue.
+
+## Error Handling
+
+- Throw errors to trigger BullMQ retry. Don't silently swallow failures.
+- Use `job.log()` for progress tracking visible in the admin dashboard.
+- Dead-letter failed jobs after max retries — log to audit for admin review.
+
+## Queues
+
+| Queue | Purpose | Retry |
+|-------|---------|-------|
+| `llm-completion` | LLM streaming calls | 3 attempts, exponential backoff |
+| `audit-write` | Async audit log persistence | 5 attempts, fixed 1s delay |
+| `webhook-delivery` | Outbound webhook POST | 3 attempts, exponential backoff |
+| `auto-title` | Generate conversation titles | 2 attempts, no backoff |

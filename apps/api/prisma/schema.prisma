@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  DEVELOPER
+  USER
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  GITHUB
+}
+
+// ─── Workspace (v1: single default, v2: multi-tenant) ──────
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String   @default("Default")
+  slug      String   @unique @default("default")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("workspaces")
+}
+
+// ─── User ───────────────────────────────────────────────────
+
+model User {
+  id            String       @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id])
+  email         String       @unique
+  passwordHash  String?
+  name          String?
+  avatar        String?
+  role          Role         @default(USER)
+  authProvider  AuthProvider @default(LOCAL)
+  oauthId       String?
+  emailVerified Boolean      @default(false)
+  isActive      Boolean      @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  refreshTokens RefreshToken[]
+
+  @@unique([authProvider, oauthId])
+  @@index([workspaceId])
+  @@index([email])
+  @@map("users")
+}
+
+// ─── Refresh Token ──────────────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}

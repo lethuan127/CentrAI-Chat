@@ -1,0 +1,63 @@
+---
+description: NestJS backend conventions for apps/api
+globs: "apps/api/**/*.ts"
+alwaysApply: false
+---
+
+# NestJS API Conventions
+
+## Module Structure
+
+- One module per feature domain: `auth/`, `chat/`, `agent/`, `provider/`, `admin/`, `audit/`.
+- Each module has: `*.module.ts`, `*.service.ts`, `*.controller.ts`.
+- Barrel export from each module's `index.ts`.
+
+## Controllers
+
+- Controllers handle HTTP only — no business logic. Validate → delegate to service → respond.
+- Use `@ApiTags()`, `@ApiOperation()`, `@ApiResponse()` on every method (Swagger).
+- Apply `@UseGuards(JwtAuthGuard, RolesGuard)` at controller level.
+- Use `@Roles('admin')` or `@Roles('admin', 'developer')` on routes that need RBAC.
+
+```typescript
+// ✅ Thin controller with Zod validation + RBAC
+@Post()
+@Roles('admin', 'developer')
+@UsePipes(new ZodValidationPipe(createAgentSchema))
+@ApiOperation({ summary: 'Create agent' })
+async create(@Body() dto: CreateAgentDto, @CurrentUser() user: User) {
+  return this.agentService.create(user.id, dto);
+}
+```
+
+## DTOs & Validation
+
+- Zod schemas in `@centrai/types` are the single source of truth for validation.
+- Use a `ZodValidationPipe` (custom or `nestjs-zod`) to validate request bodies against Zod schemas.
+- Separate `CreateDto`, `UpdateDto`, and `ResponseDto` per entity — all derived from Zod with `z.infer<>`.
+- Transform/strip unknown fields at the pipe level, not in services.
+
+## Guards & RBAC
+
+- `JwtAuthGuard` — verifies JWT token.
+- `RolesGuard` — checks `user.role` against `@Roles()` metadata.
+- Admin endpoints: `@Roles('admin')`. Agent CRUD: `@Roles('admin', 'developer')`. Chat: any authenticated user.
+- End users hitting admin endpoints must receive 403, never 404.
+
+## Provider Adapter Pattern
+
+- All LLM providers implement `ProviderAdapter` interface: `complete()`, `listModels()`, `healthCheck()`.
+- Normalize to OpenAI chat completion format internally.
+- Streaming via `Observable<CompletionChunk>`.
+
+## Error Handling
+
+- Throw NestJS `HttpException` subclasses (`NotFoundException`, `ForbiddenException`, etc.).
+- Global exception filter wraps all errors in `{ data: null, error: { code, message }, meta }` envelope.
+- Log errors with NestJS `Logger` — include request ID for tracing.
+
+## Agent Publish Workflow
+
+- New agents start as `draft`. Only `published` agents appear in `GET /agents/published`.
+- `POST /agents/:id/publish` transitions `draft → published`.
+- Never expose `systemPrompt` to end-user-facing endpoints.

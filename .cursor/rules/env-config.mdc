@@ -1,0 +1,93 @@
+---
+description: Environment variables, configuration loading, and secrets management
+globs: "**/.env*,**/config*,apps/api/src/main.ts,apps/api/src/app.module.ts"
+alwaysApply: false
+---
+
+# Environment & Configuration
+
+## Single Source: `.env.example`
+
+- `.env.example` is the **contract** — every env var the project uses must be listed here.
+- When adding a new env var: update `.env.example` first with a placeholder, then use it in code.
+- Group vars with section comments (`# ─── Database ───`). Keep alphabetical within groups.
+
+## API (NestJS): Always Use ConfigService
+
+Access env vars exclusively through `@nestjs/config` `ConfigService`:
+
+```typescript
+// ❌ Bad: direct process.env access — untestable, no validation
+const port = process.env.API_PORT || 4000;
+const origin = process.env.CORS_ORIGIN;
+
+// ✅ Good: ConfigService with explicit fallback
+const port = this.configService.get<number>('API_PORT', 4000);
+
+// ✅ Good: getOrThrow for required vars — fails fast at startup
+const secret = this.configService.getOrThrow<string>('JWT_SECRET');
+```
+
+- Use `getOrThrow()` for secrets and required vars (`JWT_SECRET`, `DATABASE_URL`, `ENCRYPTION_KEY`).
+- Use `get()` with a default for optional vars (`API_PORT`, `JWT_ACCESS_EXPIRATION`).
+- Never access `process.env` directly in services, controllers, or modules.
+
+## Web (Next.js): NEXT_PUBLIC_ Prefix
+
+- Client-exposed vars **must** use `NEXT_PUBLIC_` prefix.
+- Server-only vars (API routes, middleware) use plain names.
+- Centralize access in `src/lib/env.ts` — don't scatter `process.env` across components.
+
+```typescript
+// apps/web/src/lib/env.ts
+export const env = {
+  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000',
+} as const;
+```
+
+## Required Variables by App
+
+| Variable | App | Required | Secret |
+|----------|-----|----------|--------|
+| `DATABASE_URL` | api | yes | yes |
+| `REDIS_URL` | api, worker | yes | no |
+| `JWT_SECRET` | api | yes | yes |
+| `JWT_REFRESH_SECRET` | api | yes | yes |
+| `ENCRYPTION_KEY` | api | yes | yes |
+| `API_PORT` | api | no (default 4000) | no |
+| `CORS_ORIGIN` | api | no (default localhost:3000) | no |
+| `NEXT_PUBLIC_API_URL` | web | no (default localhost:4000) | no |
+| `GOOGLE_CLIENT_ID` | api | no (OAuth optional) | yes |
+| `GITHUB_CLIENT_ID` | api | no (OAuth optional) | yes |
+
+## Secrets Safety
+
+- **Never** commit `.env`, `.env.local`, or `.env.*.local` — `.gitignore` covers these.
+- **Never** log secret values. Log `"JWT_SECRET is set"`, not the value.
+- **Never** return secrets in API responses — especially `ENCRYPTION_KEY` and provider API keys.
+- `ENCRYPTION_KEY` is used for AES-256 encryption of provider API keys at rest.
+
+## Docker & Local Dev
+
+- `docker-compose.yml` provides PostgreSQL and Redis for local dev.
+- Services should read the same `.env` file — use `env_file: .env` in compose.
+- Never hard-code `localhost` ports in application code — use env vars.
+
+## Anti-Patterns
+
+```typescript
+// ❌ Hard-coded URLs
+const api = 'http://localhost:4000/api/v1';
+
+// ❌ Secret in source code
+const key = 'sk-abc123...';
+
+// ❌ Conditional logic on NODE_ENV string comparison
+if (process.env.NODE_ENV === 'production') { ... }
+
+// ✅ Use ConfigService
+const apiUrl = this.configService.get('API_URL');
+
+// ✅ Use NestJS environment detection
+if (this.configService.get('NODE_ENV') !== 'production') { ... }
+```

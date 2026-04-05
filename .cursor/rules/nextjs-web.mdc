@@ -1,0 +1,61 @@
+---
+description: Next.js frontend conventions for apps/web
+globs: "apps/web/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Next.js Frontend Conventions
+
+## App Router
+
+- Use App Router exclusively (no Pages Router).
+- Default to **Server Components**. Only add `"use client"` when you need browser APIs, state, or effects.
+- Fetch data in async Server Components — avoid `useEffect` + `useState` for data fetching.
+- Use `next/navigation` (not `next/router`).
+
+## Route Groups
+
+- `(auth)/` — public pages (login, register). No auth required.
+- `(dashboard)/` — end-user shell. Must be authenticated. Contains `chat/`, `settings/`.
+- `(admin)/` — admin shell. Must be `admin` or `developer` role. Contains `agents/`, `providers/`, `users/`, `analytics/`, `audit/`, `settings/`.
+
+End users must never see admin routes. Redirect or show 403.
+
+## Components
+
+- File naming: `PascalCase.tsx` for components, `kebab-case.ts` for utilities/hooks.
+- UI primitives come from `@centrai/ui` (shadcn/ui based). Don't create parallel primitives.
+- Component structure: `components/chat/`, `components/admin/`, `components/layout/`, `components/ui/`.
+
+```
+// ✅ Component file structure
+export function MessageBubble({ message }: MessageBubbleProps) {
+  // ...
+}
+```
+
+## Styling
+
+- Tailwind CSS exclusively. No CSS modules, no styled-components.
+- Use `cn()` utility (from `@centrai/ui`) for conditional classes.
+- Dark mode via `class` strategy. Use `dark:` variants.
+
+## State & Data
+
+- Server state: fetch in Server Components or use React Query / SWR for client-side.
+- Auth state: `useAuth()` hook from context provider.
+- Chat streaming: `useChat()` hook using `fetch` POST + `ReadableStream` for SSE parsing.
+- Forms: React Hook Form + Zod resolver.
+
+## Chat UI Specifics
+
+- Agent/model picker shows only `published` agents and `enabled` models from API.
+- Never expose system prompts, agent config details, or internal IDs to end users.
+- Stream tokens via SSE (`text/event-stream` from POST response). Buffer and render incrementally.
+- Render assistant messages with Markdown (react-markdown + syntax highlighting + KaTeX).
+
+## Performance
+
+- Use `loading.tsx` and `Suspense` for route-level loading states.
+- Lazy-load heavy components (code editor, charts) with `dynamic()`.
+- Images via `next/image` with proper `width`/`height` or `fill`.
