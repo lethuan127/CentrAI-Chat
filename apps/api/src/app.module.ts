@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { ChatModule } from './chat/chat.module';
+import { AgentModule } from './agent/agent.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -15,6 +16,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AuthModule,
     HealthModule,
     ChatModule,
+    AgentModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

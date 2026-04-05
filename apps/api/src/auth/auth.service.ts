@@ -40,7 +40,7 @@ export class AuthService {
       },
     });
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    const tokens = await this.generateTokens(user.id, user.email, user.role, workspace.id);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
 
     return {
@@ -75,7 +75,7 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    const tokens = await this.generateTokens(user.id, user.email, user.role, user.workspaceId);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
 
     return {
@@ -109,7 +109,7 @@ export class AuthService {
       data: { revokedAt: new Date() },
     });
 
-    const tokens = await this.generateTokens(stored.user.id, stored.user.email, stored.user.role);
+    const tokens = await this.generateTokens(stored.user.id, stored.user.email, stored.user.role, stored.user.workspaceId);
     await this.storeRefreshToken(stored.user.id, tokens.refreshToken);
 
     return tokens;
@@ -165,7 +165,7 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    const tokens = await this.generateTokens(user.id, user.email, user.role, user.workspaceId);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
 
     return {
@@ -216,8 +216,8 @@ export class AuthService {
     }
   }
 
-  private async generateTokens(userId: string, email: string, role: string): Promise<TokenPair> {
-    const payload = { sub: userId, email, role };
+  private async generateTokens(userId: string, email: string, role: string, workspaceId?: string): Promise<TokenPair> {
+    const payload = { sub: userId, email, role, workspaceId };
     const accessExpSec = Math.floor(this.parseDuration(this.config.get('JWT_ACCESS_EXPIRATION', '15m')) / 1000);
     const refreshExpSec = Math.floor(this.parseDuration(this.config.get('JWT_REFRESH_EXPIRATION', '7d')) / 1000);
 

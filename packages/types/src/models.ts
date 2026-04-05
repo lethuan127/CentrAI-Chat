@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+// ─── User ────────────────────────────────────────────────────
+
 export const Role = {
   ADMIN: 'ADMIN',
   DEVELOPER: 'DEVELOPER',
@@ -28,3 +30,75 @@ export const userSchema = z.object({
 });
 
 export type User = z.infer<typeof userSchema>;
+
+// ─── Agent ───────────────────────────────────────────────────
+
+export const AgentStatus = {
+  DRAFT: 'DRAFT',
+  PUBLISHED: 'PUBLISHED',
+  ARCHIVED: 'ARCHIVED',
+} as const;
+
+export type AgentStatus = (typeof AgentStatus)[keyof typeof AgentStatus];
+
+export const agentSchema = z.object({
+  id: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  role: z.string(),
+  instructions: z.string(),
+  expectedOutput: z.string().nullable(),
+  modelId: z.string().nullable(),
+  modelProvider: z.string().nullable(),
+  modelTemperature: z.number(),
+  modelMaxTokens: z.number().int().nullable(),
+  addSessionStateToContext: z.boolean(),
+  maxTurnsMessageHistory: z.number().int().nullable(),
+  enableSessionSummaries: z.boolean(),
+  tools: z.unknown(),
+  tags: z.array(z.string()),
+  status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']),
+  version: z.number().int(),
+  createdBy: z.string().uuid(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export type Agent = z.infer<typeof agentSchema>;
+
+export const agentVersionSchema = z.object({
+  id: z.string().uuid(),
+  agentId: z.string().uuid(),
+  version: z.number().int(),
+  name: z.string(),
+  description: z.string().nullable(),
+  role: z.string(),
+  instructions: z.string(),
+  expectedOutput: z.string().nullable(),
+  modelId: z.string().nullable(),
+  modelProvider: z.string().nullable(),
+  modelTemperature: z.number(),
+  modelMaxTokens: z.number().int().nullable(),
+  addSessionStateToContext: z.boolean(),
+  maxTurnsMessageHistory: z.number().int().nullable(),
+  enableSessionSummaries: z.boolean(),
+  tools: z.unknown(),
+  tags: z.array(z.string()),
+  changelog: z.string().nullable(),
+  createdBy: z.string().uuid(),
+  createdAt: z.coerce.date(),
+});
+
+export type AgentVersion = z.infer<typeof agentVersionSchema>;
+
+export const publishedAgentSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  tags: z.array(z.string()),
+  modelId: z.string().nullable(),
+  modelProvider: z.string().nullable(),
+});
+
+export type PublishedAgent = z.infer<typeof publishedAgentSchema>;

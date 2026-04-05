@@ -31,7 +31,8 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users User[]
+  users  User[]
+  agents Agent[]
 
   @@map("workspaces")
 }
@@ -57,6 +58,8 @@ model User {
   deletedAt     DateTime?
 
   refreshTokens RefreshToken[]
+  agents        Agent[]        @relation("AgentCreator")
+  agentVersions AgentVersion[] @relation("AgentVersionCreator")
 
   @@unique([authProvider, oauthId])
   @@index([workspaceId])
@@ -78,4 +81,75 @@ model RefreshToken {
   @@index([userId])
   @@index([token])
   @@map("refresh_tokens")
+}
+
+// ─── Agent ───────────────────────────────────────────────────
+
+enum AgentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Agent {
+  id                       String      @id @default(uuid())
+  workspaceId              String
+  workspace                Workspace   @relation(fields: [workspaceId], references: [id])
+  name                     String
+  description              String?
+  role                     String      @db.Text
+  instructions             String      @db.Text
+  expectedOutput           String?     @db.Text
+  modelId                  String?
+  modelProvider            String?
+  modelTemperature         Float       @default(0.7)
+  modelMaxTokens           Int?
+  addSessionStateToContext Boolean     @default(false)
+  maxTurnsMessageHistory    Int?
+  enableSessionSummaries   Boolean     @default(false)
+  tools                    Json        @default("[]")
+  tags                     String[]    @default([])
+  status                   AgentStatus @default(DRAFT)
+  version                  Int         @default(1)
+  createdBy                String
+  creator                  User        @relation("AgentCreator", fields: [createdBy], references: [id])
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+  deletedAt                DateTime?
+
+  versions AgentVersion[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([createdBy])
+  @@map("agents")
+}
+
+model AgentVersion {
+  id                       String   @id @default(uuid())
+  agentId                  String
+  agent                    Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  version                  Int
+  name                     String
+  description              String?
+  role                     String   @db.Text
+  instructions             String   @db.Text
+  expectedOutput           String?  @db.Text
+  modelId                  String?
+  modelProvider            String?
+  modelTemperature         Float
+  modelMaxTokens           Int?
+  addSessionStateToContext Boolean
+  maxTurnsMessageHistory    Int?
+  enableSessionSummaries   Boolean
+  tools                    Json     @default("[]")
+  tags                     String[] @default([])
+  changelog                String?
+  createdBy                String
+  creator                  User     @relation("AgentVersionCreator", fields: [createdBy], references: [id])
+  createdAt                DateTime @default(now())
+
+  @@unique([agentId, version])
+  @@index([agentId])
+  @@map("agent_versions")
 }
