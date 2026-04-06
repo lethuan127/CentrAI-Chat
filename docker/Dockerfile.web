@@ -24,6 +24,7 @@ COPY turbo.json ./
 COPY packages/config/ ./packages/config/
 COPY packages/types/ ./packages/types/
 COPY apps/web/ ./apps/web/
+RUN mkdir -p apps/web/public
 
 RUN pnpm --filter @centrai/types build
 RUN pnpm --filter @centrai/web build

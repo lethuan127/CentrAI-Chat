@@ -49,8 +49,8 @@ COPY --from=builder /app/apps/api/src/generated/ ./apps/api/src/generated/
 COPY --from=builder /app/packages/types/ ./packages/types/
 COPY --from=builder /app/packages/config/package.json ./packages/config/package.json
 
-# tsx is needed to run prisma/seed.ts on first boot
-RUN npm install --no-save tsx@4
+# tsx for prisma/seed.ts — install globally; local tree is pnpm layout and breaks `npm install` here
+RUN npm install -g tsx@4
 
 COPY docker/entrypoint-api.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
