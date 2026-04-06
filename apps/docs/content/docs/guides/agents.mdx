@@ -1,0 +1,91 @@
+---
+title: Creating Agents
+description: How to create, configure, version, and publish agents
+---
+
+Agents are reusable AI configurations that wrap a model with a system prompt, parameters, and metadata. End users select from published agents in the chat picker.
+
+## Agent Lifecycle
+
+```
+  DRAFT  →  PUBLISHED  →  ARCHIVED
+    ↑           │
+    └───────────┘
+     (unpublish)
+```
+
+- **Draft** — Initial state. Only visible to admins/developers.
+- **Published** — Available to all authenticated users in the chat picker.
+- **Archived** — Hidden from chat picker. Existing conversations continue to work.
+
+## Creating an Agent
+
+### Via Admin UI
+
+1. Navigate to **Admin → Agents**
+2. Click **Create Agent**
+3. Fill in the fields:
+   - **Name** — Display name shown to users
+   - **Description** — Short description for the chat picker
+   - **Role** — High-level role definition (e.g. "You are a code review assistant")
+   - **Instructions** — Detailed instructions for behavior
+   - **Model** — Optionally bind to a specific model/provider
+   - **Temperature** — Creativity level (0 = deterministic, 2 = creative)
+   - **Tags** — Categorization labels
+4. Click **Save** (creates as draft)
+5. Click **Publish** when ready
+
+### Via SDK
+
+```typescript
+import { CentrAI } from '@centrai/sdk';
+
+const client = new CentrAI({ baseUrl: 'http://localhost:4000', accessToken: '...' });
+
+// Create
+const agent = await client.agents.create({
+  name: 'Code Reviewer',
+  description: 'Reviews code for bugs, style, and best practices',
+  role: 'You are an expert code reviewer.',
+  instructions: 'Review the provided code. Point out bugs, suggest improvements, and follow language-specific best practices. Be constructive.',
+  modelTemperature: 0.3,
+  tags: ['engineering', 'code-review'],
+});
+
+// Publish
+await client.agents.publish(agent.id);
+```
+
+## Versioning
+
+Every update to an agent creates a new immutable version. This allows:
+
+- **Rollback** — View and restore any previous version
+- **Audit trail** — See who changed what and when
+- **Pinned conversations** — Conversations reference the version they were started with
+
+```typescript
+// Update creates a new version
+await client.agents.update(agent.id, {
+  instructions: 'Updated instructions...',
+  changelog: 'Added TypeScript-specific review guidelines',
+});
+
+// View version history
+const versions = await client.agents.getVersions(agent.id);
+```
+
+## Agent Configuration Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Display name (max 100 chars) |
+| `description` | No | Short description (max 500 chars) |
+| `role` | Yes | High-level role definition |
+| `instructions` | Yes | Detailed behavior instructions |
+| `expectedOutput` | No | Description of expected output format |
+| `modelId` | No | Bind to specific model |
+| `modelProvider` | No | Provider for the bound model |
+| `modelTemperature` | No | Temperature (default: 0.7) |
+| `modelMaxTokens` | No | Max output tokens |
+| `tags` | No | Array of string tags (max 20) |

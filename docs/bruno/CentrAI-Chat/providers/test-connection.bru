@@ -1,0 +1,19 @@
+meta {
+  name: Test Connection
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/providers/:id/test
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:path {
+  id: <provider-uuid>
+}

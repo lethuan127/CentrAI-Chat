@@ -103,6 +103,46 @@ export const publishedAgentSchema = z.object({
 
 export type PublishedAgent = z.infer<typeof publishedAgentSchema>;
 
+// ─── Provider ────────────────────────────────────────────────
+
+export const ProviderType = {
+  OPENAI: 'OPENAI',
+  ANTHROPIC: 'ANTHROPIC',
+  GOOGLE: 'GOOGLE',
+  OLLAMA: 'OLLAMA',
+  CUSTOM: 'CUSTOM',
+} as const;
+
+export type ProviderType = (typeof ProviderType)[keyof typeof ProviderType];
+
+export const providerSchema = z.object({
+  id: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  name: z.string(),
+  type: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM']),
+  baseUrl: z.string().nullable(),
+  isEnabled: z.boolean(),
+  config: z.record(z.unknown()).optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export type Provider = z.infer<typeof providerSchema>;
+
+export const providerModelSchema = z.object({
+  id: z.string().uuid(),
+  providerId: z.string().uuid(),
+  modelId: z.string(),
+  name: z.string(),
+  contextWindow: z.number().int().nullable(),
+  isEnabled: z.boolean(),
+  capabilities: z.record(z.unknown()).optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export type ProviderModel = z.infer<typeof providerModelSchema>;
+
 // ─── Message Role ────────────────────────────────────────────
 
 export const MessageRole = {
@@ -125,6 +165,7 @@ export const conversationSchema = z.object({
   title: z.string().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  archivedAt: z.coerce.date().nullable().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -142,3 +183,30 @@ export const messageSchema = z.object({
 });
 
 export type Message = z.infer<typeof messageSchema>;
+
+// ─── Audit Log ──────────────────────────────────────────────
+
+export const auditLogSchema = z.object({
+  id: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  actorId: z.string().nullable(),
+  actorEmail: z.string().nullable(),
+  actorIp: z.string().nullable(),
+  action: z.string(),
+  resourceType: z.string().nullable(),
+  resourceId: z.string().nullable(),
+  metadata: z.record(z.unknown()).optional(),
+  status: z.string(),
+  createdAt: z.coerce.date(),
+});
+
+export type AuditLog = z.infer<typeof auditLogSchema>;
+
+// ─── System Setting ─────────────────────────────────────────
+
+export const systemSettingSchema = z.object({
+  key: z.string(),
+  value: z.unknown(),
+});
+
+export type SystemSetting = z.infer<typeof systemSettingSchema>;

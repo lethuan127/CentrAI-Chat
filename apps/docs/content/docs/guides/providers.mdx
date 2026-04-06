@@ -1,0 +1,85 @@
+---
+title: Configuring Providers
+description: How to add and manage LLM providers (OpenAI, Anthropic, Gemini, Ollama)
+---
+
+Providers connect CentrAI-Chat to LLM backends. Admins configure providers through the admin UI or API; end users see only the enabled models in the chat picker.
+
+## Supported Providers
+
+| Provider | Type | Notes |
+|----------|------|-------|
+| OpenAI | `OPENAI` | GPT-4o, GPT-4, GPT-3.5, o1, o3 |
+| Anthropic | `ANTHROPIC` | Claude 4, Claude 3.5 (mapped to OpenAI-compat) |
+| Google Gemini | `GOOGLE` | Gemini Pro, Flash, Ultra |
+| Ollama | `OLLAMA` | Local models (Llama, Mistral, Phi) |
+| Custom | `CUSTOM` | Any OpenAI-compatible endpoint (vLLM, LiteLLM) |
+
+## Adding a Provider via Admin UI
+
+1. Log in as an admin
+2. Navigate to **Admin → Providers**
+3. Click **Add Provider**
+4. Fill in the provider details:
+   - **Name** — Display name (e.g. "OpenAI Production")
+   - **Type** — Select from the dropdown
+   - **API Key** — Your provider API key (encrypted at rest)
+   - **Base URL** — Override for custom endpoints (leave blank for defaults)
+5. Click **Save** — well-known models are auto-populated
+6. Use **Sync Models** to fetch the latest model list from the provider
+7. Enable/disable individual models for end-user access
+
+## Adding a Provider via API
+
+```bash title="cURL"
+curl -X POST http://localhost:4000/api/v1/providers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "OpenAI",
+    "type": "OPENAI",
+    "apiKey": "sk-...",
+    "isEnabled": true
+  }'
+```
+
+## Adding a Provider via SDK
+
+```typescript title="TypeScript"
+import { CentrAI } from '@centrai/sdk';
+
+const client = new CentrAI({ baseUrl: 'http://localhost:4000', accessToken: '...' });
+
+const provider = await client.providers.create({
+  name: 'OpenAI',
+  type: 'OPENAI',
+  apiKey: 'sk-...',
+  isEnabled: true,
+});
+
+// Sync models from the provider
+await client.providers.syncModels(provider.id);
+
+// Enable a specific model
+await client.providers.toggleModel(provider.id, modelId, true);
+```
+
+## Testing Connectivity
+
+Before enabling a provider for end users, test the connection:
+
+```bash
+curl -X POST http://localhost:4000/api/v1/providers/:id/test \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+This returns latency, model count, and any error messages.
+
+## Using Ollama (Local Models)
+
+1. Install [Ollama](https://ollama.ai) and pull a model:
+   ```bash
+   ollama pull llama3.2
+   ```
+2. Add a provider with type `OLLAMA` and base URL `http://host.docker.internal:11434/v1` (for Docker) or `http://localhost:11434/v1` (for local dev)
+3. Sync models — all pulled Ollama models appear automatically

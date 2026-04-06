@@ -12,7 +12,12 @@
     "db:migrate": "pnpm --filter @centrai/api prisma migrate dev",
     "db:push": "pnpm --filter @centrai/api prisma db push",
     "db:seed": "pnpm --filter @centrai/api prisma db seed",
-    "clean": "turbo clean && rm -rf node_modules"
+    "clean": "turbo clean && rm -rf node_modules",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d --build",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "docker:reset": "docker compose -f docker/docker-compose.yml down -v",
+    "setup": "./scripts/setup.sh"
   },
   "devDependencies": {
     "prettier": "^3.4.0",

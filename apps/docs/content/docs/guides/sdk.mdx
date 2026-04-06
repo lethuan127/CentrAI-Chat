@@ -1,0 +1,101 @@
+---
+title: Using the SDK
+description: TypeScript SDK for programmatic access to the CentrAI-Chat API
+---
+
+The `@centrai/sdk` package provides typed access to every API endpoint with streaming support.
+
+## Installation
+
+```bash
+pnpm add @centrai/sdk
+```
+
+## Quick Start
+
+```typescript
+import { CentrAI } from '@centrai/sdk';
+
+const client = new CentrAI({
+  baseUrl: 'http://localhost:4000',
+});
+
+// Authenticate
+const { user, tokens } = await client.auth.login({
+  email: 'admin@example.com',
+  password: 'YourPassword1',
+});
+client.setAccessToken(tokens.accessToken);
+
+// List published agents
+const agents = await client.agents.listPublished();
+
+// List enabled models
+const models = await client.providers.getEnabledModels();
+```
+
+## Chat with Streaming
+
+```typescript
+import { CentrAI, consumeStream } from '@centrai/sdk';
+
+const client = new CentrAI({
+  baseUrl: 'http://localhost:4000',
+  accessToken: '<your-jwt>',
+});
+
+const stream = await client.chat.sendMessageStream({
+  messages: [{ role: 'user', content: 'Explain quantum computing briefly.' }],
+  modelId: 'gpt-4o-mini',
+});
+
+const fullText = await consumeStream(stream, {
+  onToken: (token) => process.stdout.write(token),
+  onConversationCreated: (id) => console.log('Conversation:', id),
+  onDone: () => console.log('\n--- Done ---'),
+});
+```
+
+## Available Resources
+
+| Resource | Methods |
+|----------|---------|
+| `client.auth` | `register`, `login`, `refresh`, `logout`, `me` |
+| `client.chat` | `createConversation`, `listConversations`, `getConversation`, `getMessages`, `updateTitle`, `deleteConversation`, `archive`, `unarchive`, `sendMessageStream` |
+| `client.agents` | `create`, `list`, `listPublished`, `get`, `update`, `publish`, `archive`, `unpublish`, `delete`, `getVersions` |
+| `client.providers` | `create`, `list`, `getEnabledModels`, `get`, `update`, `delete`, `testConnection`, `syncModels`, `toggleModel` |
+| `client.admin` | `listUsers`, `updateUser`, `getAnalyticsOverview`, `getUsageTrend`, `getAuditLogs`, `getSettings`, `updateSettings`, `getProviderHealth` |
+
+## Error Handling
+
+```typescript
+import { HttpError } from '@centrai/sdk';
+
+try {
+  await client.auth.login({ email: 'wrong@example.com', password: 'bad' });
+} catch (err) {
+  if (err instanceof HttpError) {
+    console.log(`HTTP ${err.status}:`, err.body);
+  }
+}
+```
+
+## Token Refresh
+
+Access tokens expire after 15 minutes by default. Use the refresh flow:
+
+```typescript
+const { tokens: newTokens } = await client.auth.refresh(refreshToken);
+client.setAccessToken(newTokens.accessToken);
+```
+
+## Running Examples
+
+The repository includes ready-to-run examples in `examples/sdk-basic/`:
+
+```bash
+# From the monorepo root
+pnpm --filter centrai-sdk-basic-example auth     # Auth flow
+pnpm --filter centrai-sdk-basic-example agents   # Agent CRUD
+pnpm --filter centrai-sdk-basic-example chat     # Chat with streaming
+```

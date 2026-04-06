@@ -28,6 +28,14 @@ enum MessageRole {
   SYSTEM
 }
 
+enum ProviderType {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  OLLAMA
+  CUSTOM
+}
+
 // ─── Workspace (v1: single default, v2: multi-tenant) ──────
 
 model Workspace {
@@ -37,9 +45,12 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users         User[]
-  agents        Agent[]
-  conversations Conversation[]
+  users          User[]
+  agents         Agent[]
+  conversations  Conversation[]
+  providers      Provider[]
+  auditLogs      AuditLog[]
+  systemSettings SystemSetting[]
 
   @@map("workspaces")
 }
@@ -179,6 +190,7 @@ model Conversation {
   title       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
   deletedAt   DateTime?
 
   messages Message[]
@@ -193,17 +205,96 @@ model Conversation {
 // ─── Message ─────────────────────────────────────────────────
 
 model Message {
-  id             String      @id @default(uuid())
+  id             String       @id @default(uuid())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   userId         String?
-  user           User?       @relation(fields: [userId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id])
   role           MessageRole
-  content        String      @db.Text
+  content        String       @db.Text
   tokenCount     Int?
-  createdAt      DateTime    @default(now())
+  inputTokens    Int?
+  outputTokens   Int?
+  createdAt      DateTime     @default(now())
 
   @@index([conversationId])
   @@index([createdAt])
   @@map("messages")
+}
+
+// ─── Provider ────────────────────────────────────────────────
+
+model Provider {
+  id              String       @id @default(uuid())
+  workspaceId     String
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id])
+  name            String
+  type            ProviderType
+  baseUrl         String?
+  apiKeyEncrypted String?      @db.Text
+  isEnabled       Boolean      @default(true)
+  config          Json         @default("{}")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  models ProviderModel[]
+
+  @@index([workspaceId])
+  @@map("providers")
+}
+
+model ProviderModel {
+  id            String   @id @default(uuid())
+  providerId    String
+  provider      Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  modelId       String
+  name          String
+  contextWindow Int?
+  isEnabled     Boolean  @default(false)
+  capabilities  Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([providerId, modelId])
+  @@index([providerId])
+  @@map("provider_models")
+}
+
+// ─── Audit Log ──────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  actorId     String?
+  actorEmail  String?
+  actorIp     String?
+  action      String
+  resourceType String?
+  resourceId  String?
+  metadata    Json     @default("{}")
+  status      String   @default("success")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([actorId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── System Settings ────────────────────────────────────────
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  key         String
+  value       Json
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+  @@map("system_settings")
 }

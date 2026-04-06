@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "CentrAI-Chat",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

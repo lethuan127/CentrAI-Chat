@@ -12,7 +12,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import {
   createAgentSchema,
   updateAgentSchema,
@@ -22,7 +22,16 @@ import type { CreateAgentDto, UpdateAgentDto, AgentQueryDto } from '@centrai/typ
 import { AgentService } from './agent.service';
 import { Roles, CurrentUser } from '../common';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { Audit } from '../admin/audit.interceptor';
 import { Role } from '../generated/prisma/enums.js';
+import {
+  CreateAgentBody,
+  UpdateAgentBody,
+  AgentModel,
+  PublishedAgentModel,
+  AgentVersionModel,
+} from '../common/swagger/schemas';
+import { apiEnvelopeSchema } from '../common/swagger/zod-to-openapi';
 
 interface JwtUser {
   id: string;
@@ -40,9 +49,11 @@ export class AgentController {
 
   @Post()
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @Audit({ action: 'agent.create', resourceType: 'agent' })
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Create a new agent (admin/developer)' })
-  @ApiResponse({ status: 201, description: 'Agent created' })
+  @ApiBody({ schema: CreateAgentBody, description: 'Agent definition' })
+  @ApiResponse({ status: 201, description: 'Agent created', schema: apiEnvelopeSchema(AgentModel) })
   @UsePipes(new ZodValidationPipe(createAgentSchema))
   async create(@Body() dto: CreateAgentDto, @CurrentUser() user: JwtUser) {
     const agent = await this.agentService.create(dto, user.id, user.workspaceId);
@@ -51,9 +62,20 @@ export class AgentController {
 
   @Get()
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'List all agents with filters (admin/developer)' })
-  @ApiResponse({ status: 200, description: 'Agent list' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by name/description' })
+  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'], description: 'Filter by status' })
+  @ApiQuery({ name: 'tags', required: false, type: String, description: 'Comma-separated tag filter' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20, max: 100)' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['name', 'createdAt', 'updatedAt', 'version'], description: 'Sort field' })
+  @ApiQuery({ name: 'order', required: false, enum: ['asc', 'desc'], description: 'Sort order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated agent list',
+    schema: apiEnvelopeSchema({ type: 'array', items: AgentModel }),
+  })
   async findAll(
     @Query(new ZodValidationPipe(agentQuerySchema)) query: AgentQueryDto,
     @CurrentUser() user: JwtUser,
@@ -63,9 +85,13 @@ export class AgentController {
   }
 
   @Get('published')
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'List published agents for chat picker (all authenticated users)' })
-  @ApiResponse({ status: 200, description: 'Published agents' })
+  @ApiResponse({
+    status: 200,
+    description: 'Published agents',
+    schema: apiEnvelopeSchema({ type: 'array', items: PublishedAgentModel }),
+  })
   async findPublished(@CurrentUser() user: JwtUser) {
     const agents = await this.agentService.findPublished(user.workspaceId);
     return { data: agents, error: null };
@@ -73,11 +99,11 @@ export class AgentController {
 
   @Get(':id')
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Get agent details (admin/developer)' })
-  @ApiParam({ name: 'id', description: 'Agent ID' })
-  @ApiQuery({ name: 'version', required: false, description: 'Specific version number' })
-  @ApiResponse({ status: 200, description: 'Agent details' })
+  @ApiParam({ name: 'id', description: 'Agent UUID', format: 'uuid' })
+  @ApiQuery({ name: 'version', required: false, type: Number, description: 'Specific version number' })
+  @ApiResponse({ status: 200, description: 'Agent details', schema: apiEnvelopeSchema(AgentModel) })
   @ApiResponse({ status: 404, description: 'Agent not found' })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
@@ -91,10 +117,12 @@ export class AgentController {
 
   @Patch(':id')
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @Audit({ action: 'agent.update', resourceType: 'agent' })
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Update an agent (creates new version)' })
-  @ApiParam({ name: 'id', description: 'Agent ID' })
-  @ApiResponse({ status: 200, description: 'Agent updated' })
+  @ApiParam({ name: 'id', description: 'Agent UUID', format: 'uuid' })
+  @ApiBody({ schema: UpdateAgentBody, description: 'Fields to update' })
+  @ApiResponse({ status: 200, description: 'Agent updated', schema: apiEnvelopeSchema(AgentModel) })
   @ApiResponse({ status: 404, description: 'Agent not found' })
   @UsePipes(new ZodValidationPipe(updateAgentSchema))
   async update(
@@ -108,11 +136,12 @@ export class AgentController {
 
   @Post(':id/publish')
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @Audit({ action: 'agent.publish', resourceType: 'agent' })
+  @ApiBearerAuth('bearer')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Publish an agent (draft → published)' })
-  @ApiParam({ name: 'id', description: 'Agent ID' })
-  @ApiResponse({ status: 200, description: 'Agent published' })
+  @ApiParam({ name: 'id', description: 'Agent UUID', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Agent published', schema: apiEnvelopeSchema(AgentModel) })
   async publish(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtUser,
@@ -123,11 +152,11 @@ export class AgentController {
 
   @Post(':id/archive')
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Archive an agent' })
-  @ApiParam({ name: 'id', description: 'Agent ID' })
-  @ApiResponse({ status: 200, description: 'Agent archived' })
+  @ApiParam({ name: 'id', description: 'Agent UUID', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Agent archived', schema: apiEnvelopeSchema(AgentModel) })
   async archive(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtUser,
@@ -138,11 +167,11 @@ export class AgentController {
 
   @Post(':id/unpublish')
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Unpublish an agent (published → draft)' })
-  @ApiParam({ name: 'id', description: 'Agent ID' })
-  @ApiResponse({ status: 200, description: 'Agent unpublished' })
+  @ApiParam({ name: 'id', description: 'Agent UUID', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Agent unpublished', schema: apiEnvelopeSchema(AgentModel) })
   async unpublish(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtUser,
@@ -153,10 +182,11 @@ export class AgentController {
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @Audit({ action: 'agent.delete', resourceType: 'agent' })
+  @ApiBearerAuth('bearer')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Soft-delete an agent' })
-  @ApiParam({ name: 'id', description: 'Agent ID' })
+  @ApiParam({ name: 'id', description: 'Agent UUID', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Agent deleted' })
   async remove(
     @Param('id', ParseUUIDPipe) id: string,
@@ -168,10 +198,14 @@ export class AgentController {
 
   @Get(':id/versions')
   @Roles(Role.ADMIN, Role.DEVELOPER)
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Get version history for an agent' })
-  @ApiParam({ name: 'id', description: 'Agent ID' })
-  @ApiResponse({ status: 200, description: 'Version list' })
+  @ApiParam({ name: 'id', description: 'Agent UUID', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Version list',
+    schema: apiEnvelopeSchema({ type: 'array', items: AgentVersionModel }),
+  })
   async getVersions(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtUser,

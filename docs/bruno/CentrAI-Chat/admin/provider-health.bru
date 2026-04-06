@@ -1,0 +1,15 @@
+meta {
+  name: Provider Health
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/admin/providers/health
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

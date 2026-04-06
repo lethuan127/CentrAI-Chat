@@ -1,0 +1,19 @@
+meta {
+  name: Publish Agent
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/agents/:id/publish
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:path {
+  id: <agent-uuid>
+}

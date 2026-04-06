@@ -1,0 +1,26 @@
+meta {
+  name: Update Agent
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/agents/:id
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+params:path {
+  id: <agent-uuid>
+}
+
+body:json {
+  {
+    "name": "Updated Agent Name",
+    "changelog": "Renamed for clarity"
+  }
+}

@@ -1,0 +1,66 @@
+---
+title: Quick Start
+description: Get CentrAI-Chat running locally in 5 minutes
+---
+
+## Prerequisites
+
+| Requirement | Minimum Version |
+|-------------|----------------|
+| Node.js     | 20+            |
+| pnpm        | 9+             |
+| PostgreSQL  | 15+            |
+| Redis       | 7+ (optional for dev) |
+
+## Setup
+
+```bash title="Terminal"
+# 1. Clone the repository
+git clone https://github.com/lethuan127/CentrAI-Chat.git
+cd CentrAI-Chat
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Copy env file and fill in your values
+cp .env.example .env
+
+# 4. Generate Prisma client
+pnpm db:generate
+
+# 5. Run database migrations
+pnpm db:migrate
+
+# 6. Seed default workspace + admin user
+pnpm db:seed
+
+# 7. Start development servers
+pnpm dev
+```
+
+## Default Credentials
+
+After seeding, log in with:
+
+| Field    | Value              |
+|----------|--------------------|
+| Email    | `admin@centrai.local` |
+| Password | `Admin123!`        |
+
+<Callout type="warn">
+Change the default admin password immediately after first login.
+</Callout>
+
+## What Starts
+
+| Service    | URL                           | Description        |
+|------------|-------------------------------|--------------------|
+| Web UI     | http://localhost:3000         | Next.js frontend   |
+| API        | http://localhost:4000         | NestJS backend     |
+| Swagger UI | http://localhost:4000/api/docs | Interactive API docs |
+
+## Next Steps
+
+- [Configure a provider](/docs/guides/providers) (OpenAI, Anthropic, etc.)
+- [Create your first agent](/docs/guides/agents)
+- [Deploy with Docker](/docs/getting-started/docker)

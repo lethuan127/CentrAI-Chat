@@ -51,31 +51,39 @@ After seeding, log in with:
 ```
 centrai-chat/
 ├── apps/
+│   ├── web/          # Next.js frontend (port 3000)
 │   ├── api/          # NestJS backend (port 4000)
-│   └── web/          # Next.js frontend (port 3000)
+│   ├── worker/       # BullMQ job processor
+│   └── docs/         # Documentation site (Fumadocs, port 3100)
 ├── packages/
-│   ├── config/       # Shared tsconfig, prettier presets
-│   └── types/        # Shared TypeScript types + Zod schemas
-├── docs/             # Architecture, scope, MVP plan
+│   ├── types/        # Shared TypeScript types + Zod schemas
+│   ├── sdk/          # TypeScript SDK for the API
+│   └── config/       # Shared tsconfig, prettier presets
+├── examples/
+│   ├── sdk-basic/    # SDK usage examples
+│   └── docker-selfhost/  # Self-host guide
+├── docs/             # Source docs + Bruno API collection
+├── docker/           # Docker Compose files
+├── scripts/          # Dev & ops scripts
 ├── turbo.json        # Turborepo pipeline config
 └── pnpm-workspace.yaml
 ```
 
-## API Endpoints (Phase 1 — Auth)
-
-| Method | Endpoint                   | Auth     | Description                    |
-| ------ | -------------------------- | -------- | ------------------------------ |
-| POST   | `/api/v1/auth/register`    | Public   | Register with email + password |
-| POST   | `/api/v1/auth/login`       | Public   | Login, returns JWT tokens      |
-| POST   | `/api/v1/auth/refresh`     | Public   | Refresh access token           |
-| POST   | `/api/v1/auth/logout`      | Bearer   | Revoke refresh tokens          |
-| GET    | `/api/v1/auth/me`          | Bearer   | Get current user profile       |
-| GET    | `/api/v1/auth/google`      | Public   | Initiate Google OAuth          |
-| GET    | `/api/v1/auth/github`      | Public   | Initiate GitHub OAuth          |
-| GET    | `/api/v1/health`           | Public   | Liveness check                 |
-| GET    | `/api/v1/health/ready`     | Public   | Readiness check (DB)           |
-
 ## Documentation
+
+| Resource | URL |
+|----------|-----|
+| Documentation site | http://localhost:3100 (run `pnpm dev`) |
+| Swagger UI | http://localhost:4000/api/docs |
+| OpenAPI JSON | http://localhost:4000/api/docs-json |
+
+Start the documentation site:
+
+```bash
+pnpm --filter @centrai/docs dev
+```
+
+Source docs:
 
 - [Scope & Features](docs/SCOPE.md)
 - [Architecture](docs/ARCHITECTURE.md)

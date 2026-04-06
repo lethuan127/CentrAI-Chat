@@ -74,9 +74,26 @@ export const conversationQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().optional(),
+  agentId: z.string().uuid().optional(),
+  modelId: z.string().optional(),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+  archived: z.coerce.boolean().optional().default(false),
 });
 
 export type ConversationQueryDto = z.infer<typeof conversationQuerySchema>;
+
+export const updateConversationSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+});
+
+export type UpdateConversationDto = z.infer<typeof updateConversationSchema>;
+
+export const exportConversationSchema = z.object({
+  format: z.enum(['json', 'md']).default('json'),
+});
+
+export type ExportConversationDto = z.infer<typeof exportConversationSchema>;
 
 export const messageQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -138,6 +155,149 @@ export const agentQuerySchema = z.object({
 });
 
 export type AgentQueryDto = z.infer<typeof agentQuerySchema>;
+
+// ─── Provider DTOs ───────────────────────────────────────────
+
+export const createProviderSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  type: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM']),
+  baseUrl: z.string().url().optional().nullable(),
+  apiKey: z.string().optional().nullable(),
+  isEnabled: z.boolean().default(true),
+  config: z.record(z.unknown()).optional().default({}),
+});
+
+export type CreateProviderDto = z.infer<typeof createProviderSchema>;
+
+export const updateProviderSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  baseUrl: z.string().url().optional().nullable(),
+  apiKey: z.string().optional().nullable(),
+  isEnabled: z.boolean().optional(),
+  config: z.record(z.unknown()).optional(),
+});
+
+export type UpdateProviderDto = z.infer<typeof updateProviderSchema>;
+
+export const providerQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  type: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM']).optional(),
+});
+
+export type ProviderQueryDto = z.infer<typeof providerQuerySchema>;
+
+export const updateProviderModelSchema = z.object({
+  isEnabled: z.boolean(),
+});
+
+export type UpdateProviderModelDto = z.infer<typeof updateProviderModelSchema>;
+
+// ─── Admin: User Management DTOs ─────────────────────────────
+
+export const adminUserQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().optional(),
+  role: z.enum(['ADMIN', 'DEVELOPER', 'USER']).optional(),
+  isActive: z.coerce.boolean().optional(),
+  sort: z.enum(['name', 'email', 'role', 'createdAt', 'lastLoginAt']).default('createdAt'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+});
+
+export type AdminUserQueryDto = z.infer<typeof adminUserQuerySchema>;
+
+export const adminUpdateUserSchema = z.object({
+  role: z.enum(['ADMIN', 'DEVELOPER', 'USER']).optional(),
+  isActive: z.boolean().optional(),
+  name: z.string().min(1).max(100).optional(),
+});
+
+export type AdminUpdateUserDto = z.infer<typeof adminUpdateUserSchema>;
+
+// ─── Admin: Analytics DTOs ───────────────────────────────────
+
+export const analyticsRangeSchema = z.object({
+  range: z.enum(['1d', '7d', '30d', '90d']).default('7d'),
+});
+
+export type AnalyticsRangeDto = z.infer<typeof analyticsRangeSchema>;
+
+export interface AnalyticsOverview {
+  totalUsers: number;
+  activeUsers: number;
+  totalConversations: number;
+  totalMessages: number;
+  totalTokens: number;
+  todayConversations: number;
+  todayMessages: number;
+  todayTokens: number;
+  totalAgents: number;
+  publishedAgents: number;
+  totalProviders: number;
+  enabledProviders: number;
+}
+
+export interface UsageTrendPoint {
+  date: string;
+  conversations: number;
+  messages: number;
+  tokens: number;
+}
+
+// ─── Admin: Audit Log DTOs ──────────────────────────────────
+
+export const auditLogQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(50),
+  actorId: z.string().uuid().optional(),
+  action: z.string().optional(),
+  resourceType: z.string().optional(),
+  status: z.string().optional(),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+});
+
+export type AuditLogQueryDto = z.infer<typeof auditLogQuerySchema>;
+
+// ─── Admin: System Settings DTOs ────────────────────────────
+
+export const updateSystemSettingsSchema = z.object({
+  defaultModel: z.string().optional(),
+  defaultProvider: z.string().optional(),
+  registrationEnabled: z.boolean().optional(),
+  maxConversationsPerUser: z.number().int().positive().optional(),
+  maxMessagesPerConversation: z.number().int().positive().optional(),
+  rateLimitPerMinute: z.number().int().positive().optional(),
+  maintenanceMode: z.boolean().optional(),
+});
+
+export type UpdateSystemSettingsDto = z.infer<typeof updateSystemSettingsSchema>;
+
+export interface SystemSettings {
+  defaultModel: string;
+  defaultProvider: string;
+  registrationEnabled: boolean;
+  maxConversationsPerUser: number;
+  maxMessagesPerConversation: number;
+  rateLimitPerMinute: number;
+  maintenanceMode: boolean;
+}
+
+// ─── Admin: Provider Health ─────────────────────────────────
+
+export interface ProviderHealth {
+  providerId: string;
+  providerName: string;
+  providerType: string;
+  isEnabled: boolean;
+  status: 'healthy' | 'degraded' | 'down' | 'unknown';
+  latencyMs: number | null;
+  lastChecked: string | null;
+  enabledModels: number;
+  totalModels: number;
+  errorMessage?: string;
+}
 
 // ─── Auth Responses ─────────────────────────────────────────
 

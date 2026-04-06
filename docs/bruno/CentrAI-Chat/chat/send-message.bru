@@ -1,0 +1,27 @@
+meta {
+  name: Send Message (Stream)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/chat/messages
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, how are you?"
+      }
+    ],
+    "modelId": "gpt-4o-mini"
+  }
+}

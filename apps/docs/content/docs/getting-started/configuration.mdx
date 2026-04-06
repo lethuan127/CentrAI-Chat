@@ -1,0 +1,90 @@
+---
+title: Configuration
+description: Environment variables and configuration reference
+---
+
+All configuration is managed through environment variables. Copy `.env.example` to `.env` and adjust values.
+
+## Required Variables
+
+### Database
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://centrai:centrai@localhost:5432/centrai_chat?schema=public` | PostgreSQL connection string |
+
+### Redis
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
+
+### JWT Authentication
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JWT_SECRET` | — | Secret for signing access tokens. Generate: `openssl rand -base64 48` |
+| `JWT_REFRESH_SECRET` | — | Secret for signing refresh tokens |
+| `JWT_ACCESS_EXPIRATION` | `15m` | Access token lifetime |
+| `JWT_REFRESH_EXPIRATION` | `7d` | Refresh token lifetime |
+
+### Encryption
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENCRYPTION_KEY` | — | 64-char hex string for encrypting provider API keys at rest. Generate: `openssl rand -hex 32` |
+
+## Optional Variables
+
+### OAuth Providers
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `GOOGLE_CALLBACK_URL` | Default: `http://localhost:4000/api/v1/auth/google/callback` |
+| `GITHUB_CLIENT_ID` | GitHub OAuth client ID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret |
+| `GITHUB_CALLBACK_URL` | Default: `http://localhost:4000/api/v1/auth/github/callback` |
+
+### API
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_PORT` | `4000` | Port for the NestJS API |
+| `CORS_ORIGIN` | `http://localhost:3000` | Allowed CORS origin |
+| `SWAGGER_ENABLED` | `true` | Set to `false` to disable Swagger UI in production |
+
+### Frontend
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:4000` | API URL used by the Next.js frontend |
+
+### LLM Providers
+
+| Variable | Description |
+|----------|-------------|
+| `DEFAULT_MODEL` | Default model when no DB provider is configured (e.g. `gpt-4o-mini`) |
+| `OPENAI_API_KEY` | OpenAI API key (configure via admin UI instead for production) |
+| `OPENAI_BASE_URL` | Default: `https://api.openai.com/v1` |
+
+<Callout type="info">
+For production deployments, configure LLM providers through the admin UI rather than environment variables.
+Provider API keys are encrypted at rest when stored in the database.
+</Callout>
+
+### Docker Compose
+
+These variables are only used when running via `docker compose`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTGRES_USER` | `centrai` | Postgres username |
+| `POSTGRES_PASSWORD` | `centrai` | Postgres password |
+| `POSTGRES_DB` | `centrai_chat` | Database name |
+| `POSTGRES_PORT` | `5432` | Exposed Postgres port |
+| `REDIS_PORT` | `6379` | Exposed Redis port |
+| `MINIO_ROOT_USER` | `centrai` | MinIO admin username |
+| `MINIO_ROOT_PASSWORD` | `centrai123` | MinIO admin password |
+| `WEB_PORT` | `3000` | Exposed web UI port |

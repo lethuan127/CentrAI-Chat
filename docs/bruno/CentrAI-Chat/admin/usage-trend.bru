@@ -1,0 +1,15 @@
+meta {
+  name: Usage Trend
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/admin/analytics/usage?range=7d
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

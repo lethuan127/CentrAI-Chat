@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import { PrismaService } from '../prisma';
 import { ProviderService } from '../provider';
 import { MessageRole, AgentStatus } from '../generated/prisma/enums.js';
+import type { ConversationQueryDto } from '@centrai/types';
 
 @Injectable()
 export class ChatService {
@@ -11,6 +12,19 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly providerService: ProviderService,
   ) {}
+
+  // ─── Helpers ────────────────────────────────────────────────
+
+  private async findOwnedConversation(conversationId: string, userId: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, deletedAt: null },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+    return conversation;
+  }
+
+  // ─── Conversation CRUD ──────────────────────────────────────
 
   async createConversation(
     userId: string,
@@ -36,14 +50,34 @@ export class ChatService {
     });
   }
 
-  async listConversations(
-    userId: string,
-    query: { page: number; limit: number; search?: string },
-  ) {
+  async listConversations(userId: string, query: ConversationQueryDto) {
     const where: Record<string, unknown> = { userId, deletedAt: null };
 
+    if (query.archived) {
+      where.archivedAt = { not: null };
+    } else {
+      where.archivedAt = null;
+    }
+
+    if (query.agentId) where.agentId = query.agentId;
+    if (query.modelId) where.modelId = query.modelId;
+
+    if (query.dateFrom || query.dateTo) {
+      const createdAt: Record<string, string> = {};
+      if (query.dateFrom) createdAt.gte = query.dateFrom;
+      if (query.dateTo) createdAt.lte = query.dateTo;
+      where.createdAt = createdAt;
+    }
+
     if (query.search) {
-      where.OR = [{ title: { contains: query.search, mode: 'insensitive' } }];
+      where.OR = [
+        { title: { contains: query.search, mode: 'insensitive' } },
+        {
+          messages: {
+            some: { content: { contains: query.search, mode: 'insensitive' } },
+          },
+        },
+      ];
     }
 
     const [conversations, total] = await Promise.all([
@@ -59,6 +93,7 @@ export class ChatService {
             take: 1,
             select: { content: true, role: true, createdAt: true },
           },
+          _count: { select: { messages: true } },
         },
       }),
       this.prisma.conversation.count({ where }),
@@ -73,6 +108,8 @@ export class ChatService {
         modelId: c.modelId,
         providerId: c.providerId,
         lastMessage: c.messages[0] ?? null,
+        messageCount: c._count.messages,
+        archivedAt: c.archivedAt,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
       })),
@@ -100,11 +137,7 @@ export class ChatService {
     userId: string,
     query: { page: number; limit: number },
   ) {
-    const conversation = await this.prisma.conversation.findFirst({
-      where: { id: conversationId, deletedAt: null },
-    });
-    if (!conversation) throw new NotFoundException('Conversation not found');
-    if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+    await this.findOwnedConversation(conversationId, userId);
 
     const [messages, total] = await Promise.all([
       this.prisma.message.findMany({
@@ -122,31 +155,131 @@ export class ChatService {
     };
   }
 
-  async deleteConversation(conversationId: string, userId: string) {
-    const conversation = await this.prisma.conversation.findFirst({
-      where: { id: conversationId, deletedAt: null },
+  async updateConversationTitle(conversationId: string, userId: string, title: string) {
+    await this.findOwnedConversation(conversationId, userId);
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { title },
     });
-    if (!conversation) throw new NotFoundException('Conversation not found');
-    if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+  }
 
+  // ─── Delete & Archive ──────────────────────────────────────
+
+  async deleteConversation(conversationId: string, userId: string) {
+    await this.findOwnedConversation(conversationId, userId);
     await this.prisma.conversation.update({
       where: { id: conversationId },
       data: { deletedAt: new Date() },
     });
   }
 
-  async updateConversationTitle(conversationId: string, userId: string, title: string) {
+  async archiveConversation(conversationId: string, userId: string) {
+    const conv = await this.findOwnedConversation(conversationId, userId);
+    if (conv.archivedAt) throw new ForbiddenException('Already archived');
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { archivedAt: new Date() },
+    });
+  }
+
+  async unarchiveConversation(conversationId: string, userId: string) {
+    const conv = await this.findOwnedConversation(conversationId, userId);
+    if (!conv.archivedAt) throw new ForbiddenException('Not archived');
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { archivedAt: null },
+    });
+  }
+
+  // ─── Export ─────────────────────────────────────────────────
+
+  async exportConversation(conversationId: string, userId: string, format: 'json' | 'md') {
     const conversation = await this.prisma.conversation.findFirst({
       where: { id: conversationId, deletedAt: null },
+      include: {
+        agent: { select: { name: true } },
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
 
-    return this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: { title },
-    });
+    const title = conversation.title || 'Untitled Conversation';
+
+    if (format === 'md') {
+      return this.exportAsMarkdown(conversation, title);
+    }
+    return this.exportAsJson(conversation, title);
   }
+
+  private exportAsJson(
+    conversation: {
+      id: string;
+      title: string | null;
+      agent: { name: string } | null;
+      modelId: string | null;
+      createdAt: Date;
+      messages: Array<{ role: string; content: string; createdAt: Date; tokenCount: number | null }>;
+    },
+    title: string,
+  ) {
+    const data = {
+      title,
+      agent: conversation.agent?.name ?? null,
+      model: conversation.modelId,
+      createdAt: conversation.createdAt.toISOString(),
+      messages: conversation.messages.map((m) => ({
+        role: m.role.toLowerCase(),
+        content: m.content,
+        timestamp: m.createdAt.toISOString(),
+        ...(m.tokenCount != null ? { tokenCount: m.tokenCount } : {}),
+      })),
+    };
+    return {
+      content: JSON.stringify(data, null, 2),
+      contentType: 'application/json',
+      filename: `${this.slugify(title)}.json`,
+    };
+  }
+
+  private exportAsMarkdown(
+    conversation: {
+      id: string;
+      title: string | null;
+      agent: { name: string } | null;
+      modelId: string | null;
+      createdAt: Date;
+      messages: Array<{ role: string; content: string; createdAt: Date }>;
+    },
+    title: string,
+  ) {
+    const lines: string[] = [`# ${title}`, ''];
+
+    if (conversation.agent?.name) lines.push(`**Agent:** ${conversation.agent.name}  `);
+    if (conversation.modelId) lines.push(`**Model:** ${conversation.modelId}  `);
+    lines.push(`**Date:** ${conversation.createdAt.toISOString()}  `, '---', '');
+
+    for (const msg of conversation.messages) {
+      const speaker = msg.role === 'USER' ? '**You**' : msg.role === 'ASSISTANT' ? '**Assistant**' : '**System**';
+      lines.push(`### ${speaker}`, '', msg.content, '');
+    }
+
+    return {
+      content: lines.join('\n'),
+      contentType: 'text/markdown',
+      filename: `${this.slugify(title)}.md`,
+    };
+  }
+
+  private slugify(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60);
+  }
+
+  // ─── Messaging ──────────────────────────────────────────────
 
   async ensureConversation(
     userId: string,
@@ -154,11 +287,7 @@ export class ChatService {
     dto: { conversationId?: string; agentId?: string; modelId?: string; providerId?: string },
   ): Promise<{ conversationId: string; isNew: boolean }> {
     if (dto.conversationId) {
-      const conversation = await this.prisma.conversation.findFirst({
-        where: { id: dto.conversationId, deletedAt: null },
-      });
-      if (!conversation) throw new NotFoundException('Conversation not found');
-      if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
+      await this.findOwnedConversation(dto.conversationId, userId);
       return { conversationId: dto.conversationId, isNew: false };
     }
 
@@ -176,13 +305,21 @@ export class ChatService {
     });
   }
 
-  async persistAssistantMessage(conversationId: string, content: string, tokenCount?: number) {
+  async persistAssistantMessage(
+    conversationId: string,
+    content: string,
+    tokenCount?: number,
+    inputTokens?: number,
+    outputTokens?: number,
+  ) {
     const message = await this.prisma.message.create({
       data: {
         conversationId,
         role: MessageRole.ASSISTANT,
         content,
         tokenCount: tokenCount ?? null,
+        inputTokens: inputTokens ?? null,
+        outputTokens: outputTokens ?? null,
       },
     });
 

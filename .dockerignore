@@ -1,0 +1,58 @@
+# Dependencies (reinstalled in Docker)
+node_modules/
+.pnpm-store/
+
+# Build output (rebuilt in Docker)
+dist/
+.next/
+.turbo/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE & OS
+.vscode/
+.cursor/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Git
+.git/
+.gitignore
+
+# Generated (rebuilt in Docker)
+apps/api/src/generated/
+apps/api/prisma/*.db
+
+# Tests & coverage
+coverage/
+**/*.spec.ts
+**/*.test.ts
+apps/api/test/
+
+# Documentation (not needed in images)
+docs/
+examples/
+*.md
+!packages/*/README.md
+
+# Docker files (avoid recursive context)
+docker/Dockerfile.*
+
+# CI/CD
+.github/
+
+# Misc
+LICENSE

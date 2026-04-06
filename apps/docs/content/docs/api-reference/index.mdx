@@ -1,0 +1,125 @@
+---
+title: API Reference
+description: REST API endpoints — interactive docs and OpenAPI spec
+---
+
+CentrAI-Chat exposes a RESTful API at `/api/v1`. All endpoints follow the consistent envelope format:
+
+```json
+{
+  "data": { ... },
+  "error": null,
+  "meta": { "total": 42, "page": 1, "limit": 20, "totalPages": 3 }
+}
+```
+
+## Interactive Docs
+
+When the API is running, the full interactive Swagger UI is available at:
+
+**[http://localhost:4000/api/docs](http://localhost:4000/api/docs)**
+
+You can authenticate with a JWT token and use "Try it out" to test endpoints directly.
+
+## OpenAPI Spec
+
+The machine-readable OpenAPI 3.0 JSON spec is available at:
+
+**[http://localhost:4000/api/docs-json](http://localhost:4000/api/docs-json)**
+
+Use this to:
+- Import into Postman, Bruno, Insomnia, or any API client
+- Generate client SDKs in any language
+- Validate the API with `swagger-cli validate`
+
+## Endpoint Overview
+
+### Authentication
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/auth/register` | Public | Register with email + password |
+| POST | `/auth/login` | Public | Login, returns JWT tokens |
+| POST | `/auth/refresh` | Public | Refresh access token |
+| POST | `/auth/logout` | Bearer | Revoke refresh tokens |
+| GET | `/auth/me` | Bearer | Get current user profile |
+| GET | `/auth/google` | Public | Initiate Google OAuth |
+| GET | `/auth/github` | Public | Initiate GitHub OAuth |
+
+### Chat (End-User)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/chat/conversations` | Bearer | Create a conversation |
+| GET | `/chat/conversations` | Bearer | List conversations (paginated) |
+| GET | `/chat/conversations/:id` | Bearer | Get conversation details |
+| GET | `/chat/conversations/:id/messages` | Bearer | Get messages (paginated) |
+| PATCH | `/chat/conversations/:id` | Bearer | Update title |
+| DELETE | `/chat/conversations/:id` | Bearer | Soft-delete |
+| PATCH | `/chat/conversations/:id/archive` | Bearer | Archive |
+| PATCH | `/chat/conversations/:id/unarchive` | Bearer | Unarchive |
+| GET | `/chat/conversations/:id/export` | Bearer | Export (JSON/Markdown) |
+| POST | `/chat/messages` | Bearer | Send message (SSE stream) |
+
+### Agents (Admin/Developer)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/agents` | Bearer (admin/dev) | Create agent |
+| GET | `/agents` | Bearer (admin/dev) | List agents (paginated) |
+| GET | `/agents/published` | Bearer | Published agents (all users) |
+| GET | `/agents/:id` | Bearer (admin/dev) | Get agent details |
+| PATCH | `/agents/:id` | Bearer (admin/dev) | Update agent (new version) |
+| POST | `/agents/:id/publish` | Bearer (admin/dev) | Publish agent |
+| POST | `/agents/:id/archive` | Bearer (admin/dev) | Archive agent |
+| POST | `/agents/:id/unpublish` | Bearer (admin/dev) | Unpublish agent |
+| DELETE | `/agents/:id` | Bearer (admin/dev) | Delete agent |
+| GET | `/agents/:id/versions` | Bearer (admin/dev) | Version history |
+
+### Providers (Admin)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/providers` | Bearer (admin) | Add provider |
+| GET | `/providers` | Bearer (admin) | List providers |
+| GET | `/providers/enabled-models` | Bearer | Enabled models for chat picker |
+| GET | `/providers/:id` | Bearer (admin) | Get provider details |
+| PATCH | `/providers/:id` | Bearer (admin) | Update provider |
+| DELETE | `/providers/:id` | Bearer (admin) | Delete provider |
+| POST | `/providers/:id/test` | Bearer (admin) | Test connection |
+| POST | `/providers/:id/sync` | Bearer (admin) | Sync models |
+| PATCH | `/providers/:id/models/:modelId` | Bearer (admin) | Enable/disable model |
+
+### Admin
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/admin/users` | Bearer (admin) | List users |
+| PATCH | `/admin/users/:id` | Bearer (admin) | Update user |
+| GET | `/admin/analytics/overview` | Bearer (admin) | Analytics overview |
+| GET | `/admin/analytics/usage` | Bearer (admin) | Usage trend |
+| GET | `/admin/audit-log` | Bearer (admin) | Audit log |
+| GET | `/admin/settings` | Bearer (admin) | System settings |
+| PATCH | `/admin/settings` | Bearer (admin) | Update settings |
+| GET | `/admin/providers/health` | Bearer (admin) | Provider health |
+
+### Health
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/health` | Public | Liveness check |
+| GET | `/health/ready` | Public | Readiness check (DB + Redis) |
+
+## Authentication
+
+Most endpoints require a Bearer JWT token in the `Authorization` header:
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+Obtain a token via `POST /api/v1/auth/login`. The access token expires after 15 minutes by default; use `POST /api/v1/auth/refresh` with the refresh token to get a new one.
+
+## Bruno Collection
+
+A complete [Bruno](https://www.usebruno.com/) API collection is included in the repository at `docs/bruno/`. Import it into Bruno for pre-configured requests with environment variables.

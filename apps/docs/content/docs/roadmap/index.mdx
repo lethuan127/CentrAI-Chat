@@ -1,0 +1,59 @@
+---
+title: Scope & Roadmap
+description: Platform scope, v1 features, and post-MVP roadmap
+---
+
+## Vision
+
+CentrAI-Chat is an open-source, centralized AI conversation platform. **End users** chat with published agents and enabled LLM models. **Admins** configure providers, build agents, and manage the platform.
+
+## MVP Phases
+
+| Phase | Module | Key Outcome | Status |
+|-------|--------|-------------|--------|
+| 1 | Authentication | Register, log in (email + OAuth), RBAC enforced | ✅ |
+| 2 | Agent Registry | CRUD agents, versioning, publish workflow | ✅ |
+| 3 | Chat | Stream chat with published agent or enabled model | ✅ |
+| 4 | Conversation History | Browse, search, export past conversations | ✅ |
+| 5 | Model Providers | OpenAI, Anthropic, Gemini, Ollama adapters | ✅ |
+| 6 | Admin Dashboard | User mgmt, analytics, audit log, system settings | ✅ |
+| 7 | Docker Self-Host | One-command deployment with compose | ✅ |
+| 8 | API Docs | Swagger UI, OpenAPI spec, SDK, examples | ✅ |
+
+## v1 Features
+
+### End-User Features
+
+- Responsive chat UI (desktop + mobile)
+- Conversation list with search & filters
+- Streaming responses with Markdown rendering
+- Agent / model picker (published agents + enabled models)
+- Conversation export (JSON, Markdown)
+- Dark / light theme
+
+### Admin Features
+
+- Provider management (API keys, models, health checks)
+- Agent builder with versioning and publish workflow
+- User management and role assignment
+- Usage analytics and token tracking
+- Audit log for compliance
+- System settings and feature flags
+
+### API & Developer
+
+- RESTful API with versioned endpoints (`/api/v1/...`)
+- OpenAPI / Swagger documentation
+- TypeScript SDK (`@centrai/sdk`)
+- Bruno API collection for testing
+
+## Post-MVP (v2 Roadmap)
+
+| Feature | Builds On |
+|---------|-----------|
+| Multi-agent orchestration | Chat + Agents |
+| MCP server integration | Agents + Providers |
+| Knowledge base / RAG | Agents + new embedding pipeline |
+| Tool builder | Agents |
+| Workspace / multi-tenancy | Auth + Admin |
+| Billing & usage quotas | Providers + Admin |

@@ -1,0 +1,146 @@
+---
+title: Architecture
+description: Technical architecture, module design, and data flows
+---
+
+## High-Level Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Clients                                    │
+│   Next.js Web App  ·  Mobile (future)  ·  API consumers / SDKs     │
+└──────────┬──────────────────┬───────────────────────┬───────────────┘
+           │ HTTP/REST        │ SSE (streaming)       │ HTTP/REST
+           ▼                  ▼                       ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        NestJS Backend                               │
+│                                                                     │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌─────────┐ │
+│  │   Auth   │ │   Chat   │ │  Agent    │ │ Provider │ │  Admin  │ │
+│  │ Module   │ │ Service  │ │ Service   │ │ Adapter  │ │ Module  │ │
+│  └────┬─────┘ └────┬─────┘ └─────┬─────┘ └────┬─────┘ └────┬────┘ │
+│       │             │             │             │            │      │
+│  ┌────┴─────────────┴─────────────┴─────────────┴────────────┴───┐ │
+│  │              Message Router / Orchestrator                     │ │
+│  └───────────────────────────┬───────────────────────────────────┘ │
+└─────┬──────────────┬──────────────┬──────────────┬──────────────────┘
+      │              │              │              │
+      ▼              ▼              ▼              ▼
+┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────────────┐
+│ Postgres │  │  Redis   │  │  Object  │  │  LLM Providers      │
+│          │  │ (cache,  │  │  Storage │  │  OpenAI · Anthropic  │
+│          │  │  queue)  │  │ (S3/Min) │  │  Gemini · Ollama     │
+└──────────┘  └──────────┘  └──────────┘  └─────────────────────┘
+```
+
+## Tech Stack
+
+| Layer | Technology | Rationale |
+|-------|-----------|-----------|
+| **Frontend** | Next.js 15 (App Router) | Full-stack React; SSR for SEO, client components for chat UI |
+| **Backend** | NestJS 11 (TypeScript) | Modular, decorator-driven framework with built-in DI, guards, SSE streaming |
+| **Database** | PostgreSQL + Prisma | Type-safe schema, migrations, query building |
+| **Realtime** | SSE over HTTP | Streaming LLM responses token-by-token; works through all proxies |
+| **Queue** | Redis + BullMQ | Background jobs: title generation, audit writes |
+| **Auth** | JWT + Passport.js | Local + OAuth (Google, GitHub); pluggable strategies |
+| **Deployment** | Docker Compose | One-command deployment for dev and small teams |
+
+## Main Modules
+
+### Chat Service
+
+Owns conversations and messages. Streams assistant responses via SSE.
+
+- Create, list, archive, delete conversations
+- Append user/assistant messages
+- Stream responses via the AI SDK protocol
+- Persist token usage metadata
+- Emit events for audit logging
+
+### Agent Service
+
+Manages agent definitions and lifecycle. Admin/developer only.
+
+- CRUD for agent definitions (prompt, model, tools, tags)
+- Version management (immutable snapshots)
+- Publish workflow: `draft` → `published` → `archived`
+- Only published agents visible to end users
+
+### Provider Adapter
+
+Normalizes all LLM providers behind a single OpenAI-compatible interface.
+
+- Unified `complete(messages, options)` across providers
+- Streaming via SSE / chunked transfer
+- Encrypted API key storage
+- Health checks and connection testing
+- Model sync from provider APIs
+
+### Admin Module
+
+Dashboard for system administration.
+
+- User management (list, role assignment, deactivation)
+- Analytics (conversations, messages, token usage)
+- Audit log (who did what, when)
+- System settings (default model, rate limits, feature flags)
+
+## Data Flow — Sending a Chat Message
+
+```
+User types message in Next.js UI
+        │
+        ▼
+[1] POST /api/v1/chat/messages
+    → Auth Guard validates JWT
+    → RBAC guard checks permission
+        │
+        ▼
+[2] Chat Service ensures conversation exists
+    → Persists user message in Postgres
+        │
+        ▼
+[3] Provider Service resolves model config
+    → Builds prompt context (system prompt + history)
+        │
+        ▼
+[4] AI SDK streamText() calls LLM provider
+    → Tokens stream back via SSE
+        │
+        ▼
+[5] On stream completion:
+    → Persists assistant message + token usage
+    → Generates conversation title (async, via worker)
+```
+
+## Project Structure
+
+```
+centrai-chat/
+├── apps/
+│   ├── web/          # Next.js frontend (port 3000)
+│   ├── api/          # NestJS backend (port 4000)
+│   ├── worker/       # BullMQ job processor
+│   └── docs/         # This documentation site
+├── packages/
+│   ├── types/        # Shared TypeScript types + Zod schemas
+│   ├── sdk/          # TypeScript SDK for the API
+│   └── config/       # Shared tsconfig, prettier presets
+├── docs/             # Source documentation (Markdown)
+├── examples/         # Usage examples
+├── docker/           # Docker Compose files
+└── scripts/          # Dev & ops scripts
+```
+
+## RBAC Roles
+
+| Permission | Admin | Developer | User |
+|------------|-------|-----------|------|
+| Manage users & roles | ✓ | — | — |
+| Manage providers | ✓ | — | — |
+| Create/edit/publish agents | ✓ | ✓ | — |
+| View admin dashboard | ✓ | ✓ (agents only) | — |
+| System settings | ✓ | — | — |
+| Chat with published agents | ✓ | ✓ | ✓ |
+| Chat with enabled models | ✓ | ✓ | ✓ |
+| Manage own conversations | ✓ | ✓ | ✓ |

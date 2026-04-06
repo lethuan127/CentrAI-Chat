@@ -1,0 +1,19 @@
+{
+  "name": "centrai-sdk-basic-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "auth": "npx tsx src/auth.ts",
+    "agents": "npx tsx src/agents.ts",
+    "chat": "npx tsx src/chat.ts"
+  },
+  "dependencies": {
+    "@centrai/sdk": "workspace:*",
+    "@centrai/types": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}

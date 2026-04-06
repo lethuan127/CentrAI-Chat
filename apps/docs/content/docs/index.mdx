@@ -1,0 +1,48 @@
+---
+title: Introduction
+description: CentrAI-Chat — open-source centralized AI conversation platform
+---
+
+CentrAI-Chat is an open-source platform that gives teams a unified chat interface for AI conversations. **Admins** configure LLM providers and publish agents; **end users** sign in, pick an agent or model, and chat.
+
+## Key Features
+
+- **Multi-provider** — OpenAI, Anthropic, Google Gemini, Ollama, and any OpenAI-compatible endpoint
+- **Agent builder** — Create agents with system prompts, model bindings, versioning, and publish workflow
+- **Streaming chat** — Real-time token-by-token responses via SSE
+- **Admin dashboard** — User management, analytics, audit log, system settings
+- **Self-hostable** — One-command Docker Compose deployment
+- **RBAC** — Admin, Developer, and User roles with fine-grained permissions
+
+## Architecture at a Glance
+
+```
+┌─────────────┐     ┌─────────────┐     ┌──────────┐
+│  Next.js UI │────▶│  NestJS API │────▶│ Postgres │
+│  (port 3000)│     │  (port 4000)│     │          │
+└─────────────┘     └──────┬──────┘     └──────────┘
+                           │
+                    ┌──────┴──────┐     ┌──────────┐
+                    │   Worker    │────▶│  Redis   │
+                    │  (BullMQ)   │     │          │
+                    └─────────────┘     └──────────┘
+```
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15 (App Router), Tailwind CSS 4, React 19 |
+| Backend | NestJS 11, Prisma, PostgreSQL |
+| Auth | JWT + Passport.js (local, Google, GitHub) |
+| Queue | Redis + BullMQ |
+| Monorepo | Turborepo + pnpm workspaces |
+
+## Quick Links
+
+<Cards>
+  <Card title="Quick Start" href="/docs/getting-started" />
+  <Card title="Docker Self-Host" href="/docs/getting-started/docker" />
+  <Card title="Architecture" href="/docs/architecture" />
+  <Card title="API Reference" href="/docs/api-reference" />
+  <Card title="SDK Guide" href="/docs/guides/sdk" />
+  <Card title="Scope & Roadmap" href="/docs/roadmap" />
+</Cards>
