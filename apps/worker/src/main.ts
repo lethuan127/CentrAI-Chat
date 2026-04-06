@@ -1,4 +1,9 @@
-import 'dotenv/config';
+import path from 'node:path';
+import { config as loadEnv } from 'dotenv';
+
+// Repo-root `.env` (same layout as API); package-local `.env` overrides when present.
+loadEnv({ path: path.resolve(process.cwd(), '../../.env') });
+loadEnv({ path: path.resolve(process.cwd(), '.env'), override: true });
 import { Worker } from 'bullmq';
 import { PrismaClient } from '../../api/src/generated/prisma/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';

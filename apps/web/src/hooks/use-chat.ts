@@ -46,15 +46,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       new DefaultChatTransport({
         api: `${env.apiUrl}/api/v1/chat/messages`,
         prepareSendMessagesRequest: (reqOptions) => ({
-          ...reqOptions,
           headers: {
             ...((typeof reqOptions.headers === 'object' && reqOptions.headers !== null)
               ? reqOptions.headers
               : {}),
             Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : ''}`,
           },
+          // Custom body replaces HttpChatTransport defaults — must include `messages` or the API gets an empty array.
           body: {
             ...(reqOptions.body ?? {}),
+            id: reqOptions.id,
+            messages: reqOptions.messages,
+            trigger: reqOptions.trigger,
+            messageId: reqOptions.messageId,
             conversationId: conversationIdRef.current ?? undefined,
             agentId: optionsRef.current.agentId ?? undefined,
             modelId: optionsRef.current.modelId ?? undefined,

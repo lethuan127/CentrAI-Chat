@@ -158,7 +158,7 @@ export type AgentQueryDto = z.infer<typeof agentQuerySchema>;
 
 // ─── Provider DTOs ───────────────────────────────────────────
 
-export const createProviderSchema = z.object({
+const createProviderFields = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   type: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM']),
   baseUrl: z.string().url().optional().nullable(),
@@ -166,6 +166,17 @@ export const createProviderSchema = z.object({
   isEnabled: z.boolean().default(true),
   config: z.record(z.unknown()).optional().default({}),
 });
+
+/** Accepts optional `displayName` as alias for `name` (UI label / legacy clients). */
+export const createProviderSchema = z.preprocess((raw) => {
+  if (raw && typeof raw === 'object' && raw !== null) {
+    const o = raw as Record<string, unknown>;
+    if (o.name == null && typeof o.displayName === 'string') {
+      return { ...o, name: o.displayName };
+    }
+  }
+  return raw;
+}, createProviderFields);
 
 export type CreateProviderDto = z.infer<typeof createProviderSchema>;
 

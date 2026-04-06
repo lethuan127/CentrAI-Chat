@@ -52,7 +52,7 @@ function AddProviderDialog({
 }) {
   const [step, setStep] = useState<'type' | 'config'>('type');
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [name, setName] = useState('');
+  const [providerName, setProviderName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -61,7 +61,7 @@ function AddProviderDialog({
   const reset = useCallback(() => {
     setStep('type');
     setSelectedType(null);
-    setName('');
+    setProviderName('');
     setApiKey('');
     setBaseUrl('');
     setShowKey(false);
@@ -71,7 +71,7 @@ function AddProviderDialog({
   const handleSelectType = (type: string) => {
     setSelectedType(type);
     const meta = PROVIDER_TYPES.find((t) => t.value === type);
-    setName(meta?.label ?? type);
+    setProviderName(meta?.label ?? type);
 
     if (type === 'OLLAMA') setBaseUrl('http://localhost:11434');
     else if (type === 'OPENAI') setBaseUrl('');
@@ -81,11 +81,11 @@ function AddProviderDialog({
   };
 
   const handleSubmit = async () => {
-    if (!selectedType || !name.trim()) return;
+    if (!selectedType || !providerName.trim()) return;
     setIsSubmitting(true);
     try {
       await onSubmit({
-        name: name.trim(),
+        name: providerName.trim(),
         type: selectedType,
         baseUrl: baseUrl.trim() || undefined,
         apiKey: apiKey.trim() || undefined,
@@ -141,8 +141,8 @@ function AddProviderDialog({
               <div>
                 <label className="mb-1 block text-xs font-medium">Display Name</label>
                 <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={providerName}
+                  onChange={(e) => setProviderName(e.target.value)}
                   className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
@@ -186,7 +186,7 @@ function AddProviderDialog({
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep('type')}>Back</Button>
-              <Button onClick={handleSubmit} disabled={isSubmitting || !name.trim()}>
+              <Button onClick={handleSubmit} disabled={isSubmitting || !providerName.trim()}>
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Provider'}
               </Button>
             </DialogFooter>

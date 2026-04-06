@@ -7,7 +7,6 @@ import {
   Param,
   Body,
   Query,
-  UsePipes,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -48,12 +47,11 @@ export class ProviderAdminController {
   @Roles('ADMIN')
   @Audit({ action: 'provider.create', resourceType: 'provider' })
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new ZodValidationPipe(createProviderSchema))
   @ApiOperation({ summary: 'Add a new provider (admin only)' })
   @ApiBody({ schema: CreateProviderBody, description: 'Provider configuration' })
   @ApiResponse({ status: 201, description: 'Provider created with well-known models', schema: apiEnvelopeSchema(ProviderModelSchema) })
   async create(
-    @Body() dto: CreateProviderDto,
+    @Body(new ZodValidationPipe(createProviderSchema)) dto: CreateProviderDto,
     @CurrentUser() user: { workspaceId: string },
   ) {
     const provider = await this.providerAdmin.create(user.workspaceId, dto);

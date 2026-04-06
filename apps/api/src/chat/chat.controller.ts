@@ -28,9 +28,9 @@ import type {
   ExportConversationDto,
 } from '@centrai/types';
 import {
+  ToolLoopAgent,
   createUIMessageStream,
   pipeUIMessageStreamToResponse,
-  streamText,
   convertToModelMessages,
 } from 'ai';
 import type { UIMessage } from 'ai';
@@ -199,8 +199,8 @@ export class ChatController {
   @ApiOperation({
     summary: 'Send a message and stream the assistant response via AI SDK protocol',
     description:
-      'Accepts an AI SDK-compatible message array and streams the response using the UI message stream format. ' +
-      'The response is a `text/event-stream` SSE stream following the Vercel AI SDK protocol.',
+      'Accepts an AI SDK-compatible message array and streams the assistant reply through an AI SDK ToolLoopAgent ' +
+      '(agentic tool loop; tools can be added later). The response is a `text/event-stream` SSE stream in the AI SDK UI message format.',
   })
   @ApiBody({
     schema: {
@@ -260,11 +260,13 @@ export class ChatController {
     const uiMessages: UIMessage[] = (messages ?? []) as UIMessage[];
     const modelMessages = await convertToModelMessages(uiMessages);
 
-    const result = streamText({
+    const agent = new ToolLoopAgent({
+      id: 'centrai-chat',
       model,
-      system,
-      messages: modelMessages,
-      onFinish: async ({ text, usage }) => {
+      instructions: system,
+      onFinish: async (event) => {
+        const text = event.text;
+        const usage = event.totalUsage;
         const inputTokens = usage?.inputTokens ?? undefined;
         const outputTokens = usage?.outputTokens ?? undefined;
         const tokenCount = inputTokens != null && outputTokens != null
@@ -278,6 +280,8 @@ export class ChatController {
         }
       },
     });
+
+    const result = await agent.stream({ messages: modelMessages });
 
     const stream = createUIMessageStream({
       execute: ({ writer }) => {
