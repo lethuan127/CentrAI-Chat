@@ -2,6 +2,9 @@
   "name": "@centrai/api",
   "version": "0.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
@@ -13,6 +16,7 @@
     "@ai-sdk/anthropic": "^3.0.0",
     "@ai-sdk/google": "^3.0.0",
     "@ai-sdk/openai": "^3.0.50",
+    "@centrai/agent": "workspace:*",
     "@centrai/types": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",

@@ -54,8 +54,10 @@ export const MessageContent = ({
 }: MessageContentProps) => (
   <div
     className={cn(
-      "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:ml-auto group-[.is-user]:rounded-lg group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
+      "flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
+      // Light: ChatGPT-style pill (neutral gray, dark text). Avoid theme `secondary` here — it is blue in globals and was paired with `text-foreground`, which hurt contrast.
+      "group-[.is-user]:ml-auto group-[.is-user]:rounded-[1.35rem] group-[.is-user]:bg-[#f4f4f4] group-[.is-user]:px-4 group-[.is-user]:py-2.5 group-[.is-user]:text-[15px] group-[.is-user]:leading-normal group-[.is-user]:text-[#0d0d0d]",
+      "dark:group-[.is-user]:bg-neutral-800 dark:group-[.is-user]:text-neutral-100",
       "group-[.is-assistant]:text-foreground",
       className
     )}

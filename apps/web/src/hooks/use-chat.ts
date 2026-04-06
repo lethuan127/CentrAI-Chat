@@ -9,12 +9,30 @@ import { apiClient } from '@/lib/api-client';
 
 export type ChatMessage = UIMessage;
 
+export interface BranchGraphMessage {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: string;
+  parentId?: string | null;
+}
+
 interface UseChatOptions {
   agentId?: string;
   modelId?: string;
   providerId?: string;
   conversationId?: string;
   onConversationCreated?: (conversationId: string) => void;
+  /**
+   * IANA time zone sent with each chat request so the API can format "now" for the model.
+   * Defaults to `Intl.DateTimeFormat().resolvedOptions().timeZone` in the browser.
+   */
+  getClientTimeZone?: () => string | undefined;
+}
+
+export interface ConversationMeta {
+  modelId: string | null;
+  agentName: string | null;
 }
 
 interface UseChatReturn {
@@ -23,11 +41,39 @@ interface UseChatReturn {
   isLoadingHistory: boolean;
   error: Error | undefined;
   conversationId: string | null;
+  branchGraph: BranchGraphMessage[];
+  conversationMeta: ConversationMeta;
   sendMessage: (text: string) => void;
+  regenerateAssistantBranch: (assistantMessageId: string) => void;
+  switchActiveBranch: (focusMessageId: string) => Promise<void>;
+  /** Edit user message (API), reload transcript, then regenerate — uses a new assistant branch when a reply already exists. */
+  editUserMessageAndRegenerate: (messageId: string, newContent: string) => Promise<void>;
   stop: () => void;
   clearMessages: () => void;
   loadConversation: (id: string) => Promise<void>;
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
+}
+
+function toUiMessage(msg: {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: string;
+}): UIMessage {
+  return {
+    id: msg.id,
+    role: msg.role.toLowerCase() as 'user' | 'assistant',
+    parts: [{ type: 'text' as const, text: msg.content }],
+  } as UIMessage;
+}
+
+function browserDefaultTimeZone(): string | undefined {
+  if (typeof Intl === 'undefined') return undefined;
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
@@ -35,11 +81,58 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     options.conversationId ?? null,
   );
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [branchGraph, setBranchGraph] = useState<BranchGraphMessage[]>([]);
+  const [conversationMeta, setConversationMeta] = useState<ConversationMeta>({
+    modelId: null,
+    agentName: null,
+  });
 
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const branchFromAssistantRef = useRef<string | null>(null);
+  const messagesRef = useRef<UIMessage[]>([]);
+
+  const loadConversation = useCallback(
+    async (
+      id: string,
+      setAiMessages: (m: UIMessage[]) => void,
+      opts?: { silent?: boolean },
+    ) => {
+      if (!opts?.silent) setIsLoadingHistory(true);
+      try {
+        const envelope = await apiClient.get<
+          Array<{
+            id: string;
+            role: string;
+            content: string;
+            createdAt: string;
+            parentId?: string | null;
+          }>
+        >(`/chat/conversations/${id}/messages?limit=500`);
+
+        const path = envelope.data;
+        const meta = envelope.meta ?? {};
+        const all = (meta.allMessages as BranchGraphMessage[] | undefined) ?? path;
+
+        setBranchGraph(Array.isArray(all) ? all : []);
+        setConversationMeta({
+          modelId: (meta.modelId as string | null | undefined) ?? null,
+          agentName: (meta.agentName as string | null | undefined) ?? null,
+        });
+
+        const uiMessages: UIMessage[] = path.map((msg) => toUiMessage(msg));
+        setAiMessages(uiMessages);
+        setConversationId(id);
+      } catch {
+        // Fail silently — conversation sidebar can show the error state
+      } finally {
+        if (!opts?.silent) setIsLoadingHistory(false);
+      }
+    },
+    [],
+  );
 
   const transport = useMemo(
     () =>
@@ -52,7 +145,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               : {}),
             Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : ''}`,
           },
-          // Custom body replaces HttpChatTransport defaults — must include `messages` or the API gets an empty array.
           body: {
             ...(reqOptions.body ?? {}),
             id: reqOptions.id,
@@ -63,6 +155,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             agentId: optionsRef.current.agentId ?? undefined,
             modelId: optionsRef.current.modelId ?? undefined,
             providerId: optionsRef.current.providerId ?? undefined,
+            branchFromAssistantMessageId: branchFromAssistantRef.current ?? undefined,
+            timeZone:
+              optionsRef.current.getClientTimeZone?.() ?? browserDefaultTimeZone(),
           },
         }),
       }),
@@ -72,6 +167,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const {
     messages,
     sendMessage: aiSendMessage,
+    regenerate,
     status,
     error,
     stop,
@@ -88,52 +184,90 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         optionsRef.current.onConversationCreated?.(cid);
       }
     },
-  });
-
-  const loadConversation = useCallback(
-    async (id: string) => {
-      setIsLoadingHistory(true);
-      try {
-        const res = await apiClient.get<
-          Array<{ id: string; role: string; content: string; createdAt: string }>
-        >(`/chat/conversations/${id}/messages?limit=100`);
-
-        const uiMessages: UIMessage[] = res.data.map((msg) => ({
-          id: msg.id,
-          role: msg.role.toLowerCase() as 'user' | 'assistant',
-          content: msg.content,
-          parts: [{ type: 'text' as const, text: msg.content }],
-          createdAt: new Date(msg.createdAt),
-        }));
-
-        setMessages(uiMessages);
-        setConversationId(id);
-      } catch {
-        // Fail silently — conversation sidebar can show the error state
-      } finally {
-        setIsLoadingHistory(false);
+    onFinish: () => {
+      branchFromAssistantRef.current = null;
+      const cid = conversationIdRef.current;
+      if (cid) {
+        void loadConversation(cid, setMessages, { silent: true });
       }
     },
-    [setMessages],
+  });
+
+  messagesRef.current = messages;
+
+  const loadConversationWrapper = useCallback(
+    async (id: string) => {
+      await loadConversation(id, setMessages);
+    },
+    [loadConversation, setMessages],
   );
 
+  // Always load transcript when the URL / parent passes a conversation id.
+  // Do not compare to conversationIdRef: on refresh we initialize state from the same id,
+  // so ref would match and we'd skip the fetch (empty thread until the user sends a message).
   useEffect(() => {
-    if (options.conversationId && options.conversationId !== conversationIdRef.current) {
-      loadConversation(options.conversationId);
-    }
-  }, [options.conversationId, loadConversation]);
+    const id = options.conversationId;
+    if (!id) return;
+    void loadConversationWrapper(id);
+  }, [options.conversationId, loadConversationWrapper]);
 
   const sendMessage = useCallback(
     (text: string) => {
       if (!text.trim()) return;
+      branchFromAssistantRef.current = null;
       aiSendMessage({ text: text.trim() });
     },
     [aiSendMessage],
   );
 
+  const regenerateAssistantBranch = useCallback(
+    (assistantMessageId: string) => {
+      if (!conversationIdRef.current) return;
+      branchFromAssistantRef.current = assistantMessageId;
+      void regenerate({ messageId: assistantMessageId });
+    },
+    [regenerate],
+  );
+
+  const switchActiveBranch = useCallback(
+    async (focusMessageId: string) => {
+      const id = conversationIdRef.current;
+      if (!id) return;
+      await apiClient.patch(`/chat/conversations/${id}/active-leaf`, {
+        messageId: focusMessageId,
+      });
+      await loadConversationWrapper(id);
+    },
+    [loadConversationWrapper],
+  );
+
+  const editUserMessageAndRegenerate = useCallback(
+    async (messageId: string, newContent: string) => {
+      const trimmed = newContent.trim();
+      if (!trimmed) return;
+      const cid = conversationIdRef.current;
+      if (!cid) return;
+
+      const list = messagesRef.current;
+      const idx = list.findIndex((m) => m.id === messageId);
+      const next = idx >= 0 && idx < list.length - 1 ? list[idx + 1] : undefined;
+      branchFromAssistantRef.current =
+        next?.role === 'assistant' ? next.id : null;
+
+      await apiClient.patch(`/chat/conversations/${cid}/messages/${messageId}`, {
+        content: trimmed,
+      });
+      await loadConversation(cid, setMessages, { silent: true });
+      void regenerate({ messageId });
+    },
+    [loadConversation, regenerate, setMessages],
+  );
+
   const clearMessages = useCallback(() => {
     setMessages([]);
     setConversationId(null);
+    setBranchGraph([]);
+    setConversationMeta({ modelId: null, agentName: null });
   }, [setMessages]);
 
   return {
@@ -142,10 +276,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     isLoadingHistory,
     error,
     conversationId,
+    branchGraph,
+    conversationMeta,
     sendMessage,
+    regenerateAssistantBranch,
+    switchActiveBranch,
+    editUserMessageAndRegenerate,
     stop,
     clearMessages,
-    loadConversation,
+    loadConversation: loadConversationWrapper,
     setMessages,
   };
 }

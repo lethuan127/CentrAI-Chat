@@ -97,11 +97,23 @@ export type ExportConversationDto = z.infer<typeof exportConversationSchema>;
 
 export const messageQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(50),
+  limit: z.coerce.number().int().positive().max(500).default(500),
   before: z.string().datetime().optional(),
 });
 
 export type MessageQueryDto = z.infer<typeof messageQuerySchema>;
+
+export const updateActiveLeafSchema = z.object({
+  messageId: z.string().uuid(),
+});
+
+export type UpdateActiveLeafDto = z.infer<typeof updateActiveLeafSchema>;
+
+export const editUserMessageSchema = z.object({
+  content: z.string().min(1, 'Message cannot be empty').max(100_000),
+});
+
+export type EditUserMessageDto = z.infer<typeof editUserMessageSchema>;
 
 // ─── Agent DTOs ──────────────────────────────────────────────
 

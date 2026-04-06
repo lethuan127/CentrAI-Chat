@@ -12,6 +12,7 @@ import {
   UsePipes,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -20,20 +21,24 @@ import {
   conversationQuerySchema,
   messageQuerySchema,
   exportConversationSchema,
+  updateActiveLeafSchema,
+  editUserMessageSchema,
 } from '@centrai/types';
 import type {
   CreateConversationDto,
   ConversationQueryDto,
   MessageQueryDto,
   ExportConversationDto,
+  UpdateActiveLeafDto,
+  EditUserMessageDto,
 } from '@centrai/types';
+import { createCentrAiChatStream } from '@centrai/agent';
 import {
-  ToolLoopAgent,
   createUIMessageStream,
   pipeUIMessageStreamToResponse,
   convertToModelMessages,
 } from 'ai';
-import type { UIMessage } from 'ai';
+import type { InferUIMessageChunk, UIMessage } from 'ai';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { ChatService } from './chat.service';
@@ -108,11 +113,11 @@ export class ChatController {
   @ApiOperation({ summary: 'Get messages in a conversation' })
   @ApiParam({ name: 'id', description: 'Conversation UUID', format: 'uuid' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 50, max: 100)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max messages to load for branching graph (default: 500, max: 500)' })
   @ApiQuery({ name: 'before', required: false, type: String, description: 'Fetch messages before this ISO 8601 date' })
   @ApiResponse({
     status: 200,
-    description: 'Paginated message list',
+    description: 'Active branch transcript (root → leaf). Meta includes allMessages for branch switching.',
     schema: apiEnvelopeSchema({ type: 'array', items: MessageModel }),
   })
   async getMessages(
@@ -137,6 +142,40 @@ export class ChatController {
   ) {
     const conversation = await this.chatService.updateConversationTitle(id, user.id, title);
     return { data: conversation, error: null };
+  }
+
+  @Patch('conversations/:id/active-leaf')
+  @ApiOperation({ summary: 'Set active branch by focusing a message (typically an assistant variant)' })
+  @ApiParam({ name: 'id', description: 'Conversation UUID', format: 'uuid' })
+  @ApiBody({ schema: { type: 'object', properties: { messageId: { type: 'string', format: 'uuid' } }, required: ['messageId'] } })
+  @ApiResponse({ status: 200, description: 'Active leaf updated' })
+  async setActiveLeaf(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateActiveLeafSchema)) body: UpdateActiveLeafDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    const result = await this.chatService.setActiveLeafFromFocusMessage(id, user.id, body.messageId);
+    return { data: result, error: null };
+  }
+
+  @Patch('conversations/:id/messages/:messageId')
+  @ApiOperation({
+    summary: 'Edit a user message (branching resend)',
+    description:
+      'Updates the user message text. Keeps existing assistant reply(ies) to this user message as branches; removes only continuations under those assistants. Client should then POST /chat/messages with branchFromAssistantMessageId set to the prior assistant on this turn.',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation UUID', format: 'uuid' })
+  @ApiParam({ name: 'messageId', description: 'User message UUID', format: 'uuid' })
+  @ApiBody({ schema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'] } })
+  @ApiResponse({ status: 200, description: 'Message updated (id, content, conversationId)' })
+  async editUserMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body(new ZodValidationPipe(editUserMessageSchema)) body: EditUserMessageDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    const result = await this.chatService.editUserMessageContent(id, user.id, messageId, body.content);
+    return { data: result, error: null };
   }
 
   @Delete('conversations/:id')
@@ -199,8 +238,9 @@ export class ChatController {
   @ApiOperation({
     summary: 'Send a message and stream the assistant response via AI SDK protocol',
     description:
-      'Accepts an AI SDK-compatible message array and streams the assistant reply through an AI SDK ToolLoopAgent ' +
-      '(agentic tool loop; tools can be added later). The response is a `text/event-stream` SSE stream in the AI SDK UI message format.',
+      'Accepts an AI SDK-compatible message array and streams the assistant reply through a Mastra Agent ' +
+      '(agent layer `@centrai/agent`: Mastra agent + AI SDK v6 UI stream bridge). ' +
+      'The response is `text/event-stream` in the AI SDK UI message format.',
   })
   @ApiBody({
     schema: {
@@ -224,6 +264,17 @@ export class ChatController {
         agentId: { type: 'string', format: 'uuid', description: 'Agent to converse with' },
         modelId: { type: 'string', description: 'Model identifier (e.g. gpt-4o)' },
         providerId: { type: 'string', description: 'Provider ID override' },
+        trigger: { type: 'string', description: 'AI SDK trigger (e.g. regenerate-message)' },
+        branchFromAssistantMessageId: {
+          type: 'string',
+          format: 'uuid',
+          description: 'When regenerating: create a sibling assistant under the same user message as this assistant',
+        },
+        timeZone: {
+          type: 'string',
+          description:
+            'IANA time zone from the browser (e.g. Intl.DateTimeFormat().resolvedOptions().timeZone). Used to format server "now" for the model.',
+        },
       },
       required: ['messages'],
     },
@@ -234,7 +285,28 @@ export class ChatController {
     @Res() res: Response,
     @CurrentUser() user: { id: string; workspaceId: string },
   ) {
-    const { messages, conversationId, agentId, modelId, providerId } = req.body;
+    const {
+      messages,
+      conversationId,
+      agentId,
+      modelId,
+      providerId,
+      trigger,
+      branchFromAssistantMessageId,
+      messageId: messageIdFromBody,
+      timeZone: clientTimeZone,
+    } = req.body as {
+      messages?: unknown[];
+      conversationId?: string;
+      agentId?: string;
+      modelId?: string;
+      providerId?: string;
+      trigger?: string;
+      branchFromAssistantMessageId?: string;
+      messageId?: string;
+      /** IANA time zone from the client (Intl), used to format current time for the model */
+      timeZone?: string;
+    };
 
     const { conversationId: convId, isNew } = await this.chatService.ensureConversation(
       user.id,
@@ -242,49 +314,98 @@ export class ChatController {
       { conversationId, agentId, modelId, providerId },
     );
 
-    const lastUserMessage = messages?.[messages.length - 1];
-    if (lastUserMessage?.role === 'user') {
-      const content =
-        typeof lastUserMessage.content === 'string'
-          ? lastUserMessage.content
-          : lastUserMessage.parts
-              ?.filter((p: { type: string }) => p.type === 'text')
-              .map((p: { text: string }) => p.text)
-              .join('') ?? '';
+    const conv = await this.chatService.findOwnedConversation(convId, user.id);
 
-      await this.chatService.persistUserMessage(convId, user.id, content);
+    const lastUserMessage = messages?.[messages.length - 1] as
+      | {
+          role?: string;
+          id?: string;
+          content?: string;
+          parts?: Array<{ type: string; text?: string }>;
+        }
+      | undefined;
+
+    if (lastUserMessage?.role !== 'user') {
+      throw new BadRequestException('Last message must be a user message');
+    }
+
+    const content =
+      typeof lastUserMessage.content === 'string'
+        ? lastUserMessage.content
+        : lastUserMessage.parts
+            ?.filter((p) => p.type === 'text')
+            .map((p) => p.text)
+            .join('') ?? '';
+
+    const isRegenerate = trigger === 'regenerate-message' || branchFromAssistantMessageId != null;
+
+    type AssistantPersist =
+      | { mode: 'create'; parentUserMessageId: string }
+      | { mode: 'update'; assistantMessageId: string };
+
+    let assistantPersist: AssistantPersist;
+
+    if (isRegenerate) {
+      if (branchFromAssistantMessageId) {
+        assistantPersist = {
+          mode: 'create',
+          parentUserMessageId: await this.chatService.resolveBranchAssistantParent(
+            convId,
+            branchFromAssistantMessageId,
+          ),
+        };
+      } else if (typeof messageIdFromBody === 'string') {
+        const existing = await this.chatService.findAssistantMessage(messageIdFromBody, convId);
+        if (existing?.parentId) {
+          assistantPersist = { mode: 'update', assistantMessageId: existing.id };
+        } else {
+          const uid = typeof lastUserMessage.id === 'string' ? lastUserMessage.id : null;
+          if (!uid) {
+            throw new BadRequestException('Missing user message id for regeneration');
+          }
+          assistantPersist = {
+            mode: 'create',
+            parentUserMessageId: await this.chatService.assertUserMessageInConversation(uid, convId),
+          };
+        }
+      } else {
+        const uid = typeof lastUserMessage.id === 'string' ? lastUserMessage.id : null;
+        if (!uid) {
+          throw new BadRequestException('Missing user message id for regeneration');
+        }
+        assistantPersist = {
+          mode: 'create',
+          parentUserMessageId: await this.chatService.assertUserMessageInConversation(uid, convId),
+        };
+      }
+    } else {
+      const userRow = await this.chatService.persistUserMessage(
+        convId,
+        user.id,
+        content,
+        conv.activeLeafMessageId ?? null,
+      );
+      assistantPersist = { mode: 'create', parentUserMessageId: userRow.id };
     }
 
     const { model, system } = await this.providerService.resolveModelAndSystem(agentId, modelId, providerId);
 
+    const sessionPreamble = await this.chatService.buildChatSessionPreamble(user.id, clientTimeZone);
+    const instructions = sessionPreamble ? `${sessionPreamble}\n\n${system}` : system;
+
     const uiMessages: UIMessage[] = (messages ?? []) as UIMessage[];
     const modelMessages = await convertToModelMessages(uiMessages);
 
-    const agent = new ToolLoopAgent({
-      id: 'centrai-chat',
+    // User-visible transcript: Prisma conversation messages only. Mastra PG / Memory is for workflows & debug (see MASTRA_PG_ENABLED), not chat UI.
+    const { mastraOutput, sdkUiStream } = await createCentrAiChatStream({
+      instructions,
       model,
-      instructions: system,
-      onFinish: async (event) => {
-        const text = event.text;
-        const usage = event.totalUsage;
-        const inputTokens = usage?.inputTokens ?? undefined;
-        const outputTokens = usage?.outputTokens ?? undefined;
-        const tokenCount = inputTokens != null && outputTokens != null
-          ? inputTokens + outputTokens
-          : undefined;
-
-        await this.chatService.persistAssistantMessage(convId, text, tokenCount, inputTokens, outputTokens);
-
-        if (isNew) {
-          this.chatService.generateTitleAsync(convId);
-        }
-      },
+      messages: modelMessages,
     });
 
-    const result = await agent.stream({ messages: modelMessages });
-
     const stream = createUIMessageStream({
-      execute: ({ writer }) => {
+      originalMessages: uiMessages,
+      execute: async ({ writer }) => {
         if (isNew) {
           writer.write({
             type: 'data-conversation',
@@ -292,7 +413,38 @@ export class ChatController {
           });
         }
 
-        writer.merge(result.toUIMessageStream());
+        writer.merge(sdkUiStream as ReadableStream<InferUIMessageChunk<UIMessage>>);
+
+        const text = await mastraOutput.text;
+        const usage = await mastraOutput.totalUsage;
+        const inputTokens = usage?.inputTokens ?? undefined;
+        const outputTokens = usage?.outputTokens ?? undefined;
+        const tokenCount =
+          inputTokens != null && outputTokens != null ? inputTokens + outputTokens : undefined;
+
+        if (assistantPersist.mode === 'update') {
+          await this.chatService.updateAssistantMessage(
+            assistantPersist.assistantMessageId,
+            convId,
+            text,
+            tokenCount,
+            inputTokens,
+            outputTokens,
+          );
+        } else {
+          await this.chatService.persistAssistantMessage(
+            convId,
+            text,
+            assistantPersist.parentUserMessageId,
+            tokenCount,
+            inputTokens,
+            outputTokens,
+          );
+        }
+
+        if (isNew) {
+          this.chatService.generateTitleAsync(convId);
+        }
       },
     });
 

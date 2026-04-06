@@ -193,6 +193,11 @@ model Conversation {
   archivedAt  DateTime?
   deletedAt   DateTime?
 
+  activeLeafMessageId      String? @map("active_leaf_message_id")
+  activeLeafMessage        Message? @relation("ConversationActiveLeaf", fields: [activeLeafMessageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  forkedFromConversationId String? @map("forked_from_conversation_id")
+  forkedFromMessageId      String? @map("forked_from_message_id")
+
   messages Message[]
 
   @@index([userId])
@@ -216,9 +221,14 @@ model Message {
   inputTokens    Int?
   outputTokens   Int?
   createdAt      DateTime     @default(now())
+  parentId       String?      @map("parent_id")
+  parent         Message?     @relation("MessageThread", fields: [parentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  children       Message[]    @relation("MessageThread")
+  activeLeafFor  Conversation[] @relation("ConversationActiveLeaf")
 
   @@index([conversationId])
   @@index([createdAt])
+  @@index([parentId])
   @@map("messages")
 }
 

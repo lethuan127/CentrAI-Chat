@@ -1,3 +1,4 @@
+import { buildSystemPrompt } from '@centrai/agent';
 import {
   Injectable,
   Logger,
@@ -52,7 +53,9 @@ export class ProviderService {
       }
     }
 
-    const system = 'You are a helpful AI assistant. Respond clearly and concisely.';
+    const system =
+      'You are a helpful AI assistant in CentrAI-Chat, an open-source centralized AI conversation platform. ' +
+      'Respond clearly and concisely.';
     const model = await this.resolveLanguageModel(modelId, providerId);
     return { model, system };
   }
@@ -265,11 +268,10 @@ export class ProviderService {
     instructions: string;
     expectedOutput?: string | null;
   }): string {
-    const parts: string[] = [];
-    if (agent.role) parts.push(`# Role\n${agent.role}`);
-    if (agent.instructions) parts.push(`# Instructions\n${agent.instructions}`);
-    if (agent.expectedOutput)
-      parts.push(`# Expected Output\n${agent.expectedOutput}`);
-    return parts.join('\n\n');
+    return buildSystemPrompt({
+      role: agent.role,
+      instructions: agent.instructions,
+      expectedOutput: agent.expectedOutput,
+    });
   }
 }

@@ -100,7 +100,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </aside>
       )}
 
-      <main className="flex-1 overflow-hidden">{children}</main>
+      <main className="flex-1 overflow-hidden bg-white text-[#0d0d0d] dark:bg-background dark:text-foreground">
+        {children}
+      </main>
     </div>
   );
 }

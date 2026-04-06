@@ -166,6 +166,9 @@ export const conversationSchema = z.object({
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
   archivedAt: z.coerce.date().nullable().optional(),
+  activeLeafMessageId: z.string().uuid().nullable().optional(),
+  forkedFromConversationId: z.string().uuid().nullable().optional(),
+  forkedFromMessageId: z.string().uuid().nullable().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -180,6 +183,7 @@ export const messageSchema = z.object({
   content: z.string(),
   tokenCount: z.number().int().nullable(),
   createdAt: z.coerce.date(),
+  parentId: z.string().uuid().nullable().optional(),
 });
 
 export type Message = z.infer<typeof messageSchema>;
