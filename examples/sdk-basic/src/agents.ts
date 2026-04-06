@@ -7,7 +7,7 @@
 import { CentrAI } from '@centrai/sdk';
 
 const BASE_URL = process.env.CENTRAI_URL ?? 'http://localhost:4000';
-const EMAIL = process.env.CENTRAI_EMAIL ?? 'admin@example.com';
+const EMAIL = process.env.CENTRAI_EMAIL ?? 'admin@centrai.local';
 const PASSWORD = process.env.CENTRAI_PASSWORD ?? 'Admin123!';
 
 async function main() {

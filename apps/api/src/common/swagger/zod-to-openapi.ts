@@ -1,4 +1,4 @@
-import { type SchemaObject } from '@nestjs/swagger';
+import { type SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { ZodType } from 'zod';
 import { applyDecorators } from '@nestjs/common';

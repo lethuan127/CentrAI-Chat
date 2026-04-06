@@ -54,7 +54,7 @@
 | **Frontend** | Next.js (App Router, React Server Components) | Full-stack React framework; SSR for SEO on public pages, client components for chat UI. |
 | **Backend API** | NestJS (TypeScript) | Modular, decorator-driven framework with built-in DI, guards, interceptors, and SSE streaming. |
 | **Database** | PostgreSQL (+ pgvector extension) | Battle-tested relational DB; pgvector enables vector search for future RAG without a separate vector DB in v1. |
-| **ORM** | Prisma or TypeORM | Type-safe schema management, migrations, and query building. |
+| **ORM** | Prisma | Type-safe schema management, migrations, and query building. |
 | **Realtime** | Server-Sent Events (SSE) over HTTP | Streaming LLM responses token-by-token via `text/event-stream`. Zero additional dependencies; works through all HTTP proxies and load balancers. |
 | **Queue / Workers** | Redis (BullMQ) | Background job processing: LLM calls, embedding generation, webhook delivery, audit log writes. |
 | **Cache** | Redis | Session cache, rate-limit counters, hot conversation caching. |

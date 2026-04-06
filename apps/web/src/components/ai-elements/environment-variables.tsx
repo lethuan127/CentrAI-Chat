@@ -270,7 +270,7 @@ export const EnvironmentVariableCopyButton = ({
       name: () => name,
       value: () => value,
     };
-    return formatMap[copyFormat]();
+    return formatMap[copyFormat as keyof typeof formatMap]();
   }, [name, value, copyFormat]);
 
   const copyToClipboard = useCallback(async () => {

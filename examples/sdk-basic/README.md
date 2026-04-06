@@ -35,5 +35,5 @@ Each example reads from environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CENTRAI_URL` | `http://localhost:4000` | API base URL |
-| `CENTRAI_EMAIL` | `admin@example.com` | Login email |
+| `CENTRAI_EMAIL` | `admin@centrai.local` | Login email (matches `pnpm db:seed`) |
 | `CENTRAI_PASSWORD` | `Admin123!` | Login password |

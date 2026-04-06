@@ -18,6 +18,8 @@ A complete API collection for [Bruno](https://www.usebruno.com/), an open-source
 
 ## Authentication
 
+Use the seeded admin account from `pnpm db:seed` (default email `admin@centrai.local`, password `Admin123!`), or your own user from **Auth > Register**.
+
 1. Run the **Auth > Login** request — this auto-saves the `accessToken` to the environment
 2. All subsequent requests use `{{accessToken}}` via Bearer auth
 3. Run **Auth > Refresh Token** when the access token expires

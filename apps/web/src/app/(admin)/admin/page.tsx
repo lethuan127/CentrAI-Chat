@@ -221,7 +221,7 @@ export default function AdminOverviewPage() {
                 {trend.reduce((s, d) => s + d.conversations, 0).toLocaleString()}
               </p>
               <div className="mt-3">
-                <MiniChart data={trend} dataKey="conversations" />
+                <MiniChart data={trend as unknown as { [key: string]: unknown; date: string }[]} dataKey="conversations" />
               </div>
             </div>
             <div className="rounded-lg border border-border p-4">
@@ -230,7 +230,7 @@ export default function AdminOverviewPage() {
                 {trend.reduce((s, d) => s + d.messages, 0).toLocaleString()}
               </p>
               <div className="mt-3">
-                <MiniChart data={trend} dataKey="messages" />
+                <MiniChart data={trend as unknown as { [key: string]: unknown; date: string }[]} dataKey="messages" />
               </div>
             </div>
             <div className="rounded-lg border border-border p-4">
@@ -239,7 +239,7 @@ export default function AdminOverviewPage() {
                 {trend.reduce((s, d) => s + d.tokens, 0).toLocaleString()}
               </p>
               <div className="mt-3">
-                <MiniChart data={trend} dataKey="tokens" />
+                <MiniChart data={trend as unknown as { [key: string]: unknown; date: string }[]} dataKey="tokens" />
               </div>
             </div>
           </div>

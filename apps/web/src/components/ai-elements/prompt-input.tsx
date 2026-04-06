@@ -429,6 +429,7 @@ export const PromptInputActionAddAttachments = ({
   );
 
   return (
+    // @ts-expect-error @base-ui/react event type
     <DropdownMenuItem {...props} onSelect={handleSelect}>
       <ImageIcon className="mr-2 size-4" /> {label}
     </DropdownMenuItem>
@@ -450,7 +451,7 @@ export const PromptInputActionAddScreenshot = ({
 
   const handleSelect = useCallback(
     async (event: Event) => {
-      onSelect?.(event);
+      onSelect?.(event as any);
       if (event.defaultPrevented) {
         return;
       }
@@ -474,6 +475,7 @@ export const PromptInputActionAddScreenshot = ({
   );
 
   return (
+    // @ts-expect-error @base-ui/react event type
     <DropdownMenuItem {...props} onSelect={handleSelect}>
       <Monitor className="mr-2 size-4" />
       {label}
@@ -1238,7 +1240,7 @@ export const PromptInputSubmit = ({
         onStop();
         return;
       }
-      onClick?.(e);
+      onClick?.(e as any);
     },
     [isGenerating, onStop, onClick]
   );

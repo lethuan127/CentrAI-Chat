@@ -22,7 +22,7 @@ const client = new CentrAI({
 
 // Authenticate
 const { user, tokens } = await client.auth.login({
-  email: 'admin@example.com',
+  email: 'admin@centrai.local',
   password: 'YourPassword1',
 });
 client.setAccessToken(tokens.accessToken);

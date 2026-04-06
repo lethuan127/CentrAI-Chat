@@ -112,7 +112,7 @@ export function useAdminUsers(params: {
 
       const res = await apiClient.get<AdminUser[]>(`/admin/users?${queryParts.join('&')}`);
       setUsers(res.data);
-      setMeta((res.meta as PaginationMeta) ?? null);
+      setMeta((res.meta as unknown as PaginationMeta) ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
@@ -176,7 +176,7 @@ export function useAuditLog(params: {
 
       const res = await apiClient.get<AuditLogEntry[]>(`/admin/audit-log?${queryParts.join('&')}`);
       setLogs(res.data);
-      setMeta((res.meta as PaginationMeta) ?? null);
+      setMeta((res.meta as unknown as PaginationMeta) ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load audit logs');
     } finally {

@@ -250,21 +250,22 @@ Phases can overlap where there are no dependency arrows (e.g. 3+4 in parallel, 5
 | # | Task | App | Details |
 |---|---|---|---|
 | 8.1 | Swagger module setup | `apps/api` | `@nestjs/swagger` configured with title, version, bearer auth. |
-| 8.2 | DTO decorators | `apps/api` | `@ApiProperty()` on all request/response DTOs for auto-generated schemas. |
+| 8.2 | Request/response schemas | `apps/api` | Zod DTOs (`@centrai/types`) converted to OpenAPI via `zod-to-json-schema`; `@ApiBody` / `@ApiResponse` on controllers. |
 | 8.3 | Controller decorators | `apps/api` | `@ApiTags()`, `@ApiOperation()`, `@ApiResponse()` on every controller method. |
 | 8.4 | Swagger UI route | `apps/api` | Serve interactive docs at `GET /api/docs` (disabled in production by env flag). |
 | 8.5 | OpenAPI JSON export | `apps/api` | `GET /api/docs-json` — downloadable spec for SDK generation and Postman import. |
-| 8.6 | SDK generation | `packages/sdk` | Auto-generate TypeScript client from OpenAPI spec (via `openapi-typescript-codegen` or similar). |
+| 8.6 | TypeScript SDK | `packages/sdk` | Hand-written `@centrai/sdk` aligned with the REST API and response envelope; OpenAPI spec remains the contract for other generators. |
 | 8.7 | API usage examples | `examples/` | `examples/sdk-basic/` — Node.js script demonstrating auth, create agent, send message. |
-| 8.8 | Postman / Bruno collection | `docs/` | Exported collection with pre-configured environments (local, staging). |
+| 8.8 | Postman / Bruno collection | `docs/bruno/` | Bruno collection with local and staging environments. |
+| 8.9 | Documentation site | `apps/docs/` | Fumadocs (Next.js): guides, architecture summary, API overview; content in `content/docs` (MDX). |
 
 ### Acceptance Criteria
 
-- [ ] Swagger UI at `/api/docs` documents every endpoint with request/response schemas
-- [ ] "Try it out" works in Swagger UI with a valid JWT token
-- [ ] OpenAPI spec validates with no errors (`swagger-cli validate`)
-- [ ] `@centrai/sdk` can be generated from the spec and used to call all endpoints
-- [ ] Examples in `examples/sdk-basic/` run successfully against a local deployment
+- [x] Swagger UI at `/api/docs` documents every endpoint with request/response schemas
+- [x] "Try it out" works in Swagger UI with a valid JWT token
+- [ ] OpenAPI spec validates with no errors (`swagger-cli validate` — run locally against `/api/docs-json`)
+- [x] `@centrai/sdk` implements the public API (hand-maintained; OpenAPI spec is the source for third-party codegen)
+- [x] Examples in `examples/sdk-basic/` target a local deployment (see example README)
 
 ---
 

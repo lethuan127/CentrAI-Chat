@@ -39,7 +39,7 @@ description: Technical architecture, module design, and data flows
 |-------|-----------|-----------|
 | **Frontend** | Next.js 15 (App Router) | Full-stack React; SSR for SEO, client components for chat UI |
 | **Backend** | NestJS 11 (TypeScript) | Modular, decorator-driven framework with built-in DI, guards, SSE streaming |
-| **Database** | PostgreSQL + Prisma | Type-safe schema, migrations, query building |
+| **Database** | PostgreSQL + Prisma 7 | Type-safe schema, migrations, query building |
 | **Realtime** | SSE over HTTP | Streaming LLM responses token-by-token; works through all proxies |
 | **Queue** | Redis + BullMQ | Background jobs: title generation, audit writes |
 | **Auth** | JWT + Passport.js | Local + OAuth (Google, GitHub); pluggable strategies |

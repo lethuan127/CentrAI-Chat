@@ -14,8 +14,8 @@ Deploy CentrAI-Chat on any machine with Docker in under 5 minutes.
 ## Quick Start (Automated)
 
 ```bash
-git clone https://github.com/your-org/centrai-chat.git
-cd centrai-chat
+git clone https://github.com/lethuan127/CentrAI-Chat.git
+cd CentrAI-Chat
 ./scripts/setup.sh
 ```
 
@@ -33,8 +33,8 @@ The setup script will:
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/your-org/centrai-chat.git
-cd centrai-chat
+git clone https://github.com/lethuan127/CentrAI-Chat.git
+cd CentrAI-Chat
 cp .env.example .env
 ```
 

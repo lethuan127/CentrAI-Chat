@@ -5,7 +5,7 @@ Open-source centralized AI conversation platform. Admins configure providers and
 ## Tech Stack
 
 - **Frontend** — Next.js 15 (App Router), Tailwind CSS 4, React 19
-- **Backend** — NestJS 11, Prisma 6, PostgreSQL
+- **Backend** — NestJS 11, Prisma 7, PostgreSQL
 - **Auth** — JWT (access + refresh), Passport.js (local, Google, GitHub)
 - **Monorepo** — Turborepo + pnpm workspaces
 
@@ -16,6 +16,7 @@ Open-source centralized AI conversation platform. Admins configure providers and
 - Node.js >= 20
 - pnpm >= 9
 - PostgreSQL 15+
+- Redis 7+ (required for the worker / background jobs; Docker Compose provides it)
 
 ### Setup
 
@@ -46,6 +47,8 @@ After seeding, log in with:
 - **Email:** `admin@centrai.local`
 - **Password:** `Admin123!`
 
+These values are defined in `apps/api/prisma/seed.ts` (run `pnpm db:seed`). Change the seed if you want different defaults.
+
 ## Project Structure
 
 ```
@@ -73,15 +76,18 @@ centrai-chat/
 
 | Resource | URL |
 |----------|-----|
-| Documentation site | http://localhost:3100 (run `pnpm dev`) |
+| Documentation site | http://localhost:3100 |
 | Swagger UI | http://localhost:4000/api/docs |
 | OpenAPI JSON | http://localhost:4000/api/docs-json |
 
-Start the documentation site:
+`pnpm dev` starts every workspace package that defines a `dev` script (typically web, API, worker). The docs site is separate:
 
 ```bash
-pnpm --filter @centrai/docs dev
+pnpm docs:dev
+# same as: pnpm --filter @centrai/docs dev
 ```
+
+Authoring: edit MDX under `apps/docs/content/docs/`. Long-form specs in-repo remain under `docs/*.md` (Scope, Architecture, MVP).
 
 Source docs:
 

@@ -251,12 +251,12 @@ function AgentCard({
             <Badge variant={cfg.variant}>{cfg.label}</Badge>
             <DropdownMenu>
               <DropdownMenuTrigger
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                 <DropdownMenuItem onClick={() => onAction('view', agent)}>
                   <Eye className="h-4 w-4" />
                   View
