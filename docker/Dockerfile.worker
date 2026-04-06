@@ -17,6 +17,9 @@ RUN pnpm install --frozen-lockfile
 # ── Stage 2: Build ────────────────────────────────────────────
 FROM deps AS builder
 
+# prisma.config.ts resolves DATABASE_URL at load time; generate does not connect to the DB
+ENV DATABASE_URL="postgresql://centrai:centrai@localhost:5432/centrai_chat?schema=public"
+
 COPY turbo.json ./
 COPY packages/config/ ./packages/config/
 COPY packages/types/ ./packages/types/
@@ -55,4 +58,4 @@ COPY --from=builder /app/packages/config/package.json ./packages/config/package.
 EXPOSE 0
 
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "apps/worker/dist/main.js"]
+CMD ["node", "apps/worker/dist/worker/src/main.js"]

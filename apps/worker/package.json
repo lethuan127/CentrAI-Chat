@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js",
+    "start": "node dist/worker/src/main.js",
     "lint": "tsc --noEmit --project tsconfig.lint.json"
   },
   "dependencies": {
