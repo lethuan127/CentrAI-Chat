@@ -1,4 +1,4 @@
-import { formatSessionStateBlock, type SessionState } from './session.js';
+import { formatSessionStateBlock, type SessionState } from './session-state.js';
 
 export interface SystemPromptInput {
   role: string;

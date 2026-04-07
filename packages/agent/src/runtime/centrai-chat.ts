@@ -1,11 +1,12 @@
-import { toAISdkStream } from '@mastra/ai-sdk';
 import type { MessageListInput } from '@mastra/core/agent/message-list';
-import { Agent } from '@mastra/core/agent';
 import type { MastraModelOutput } from '@mastra/core/stream';
-import { Memory } from '@mastra/memory';
 import type { PostgresStore } from '@mastra/pg';
 import type { ModelMessage } from 'ai';
-import { stepCountIs } from 'ai';
+
+import { COMPILED_RUN_PLAN_VERSION, type CompiledRunPlan } from '../compile/compiled-run-plan.js';
+import { AgentRuntimeError } from '../errors.js';
+import { createRuntimeAdapter } from './factory.js';
+import type { AdapterDeps } from './types.js';
 
 const DEFAULT_AGENT_ID = 'centrai-chat';
 const DEFAULT_NAME = 'CentrAI Chat';
@@ -40,6 +41,8 @@ export interface CentrAiChatStreamParams {
    */
   postgresStore?: PostgresStore;
   memoryScope?: CentrAiChatMemoryScope;
+  /** Abort when the client disconnects (e.g. `req.on('close')` + `AbortController`). */
+  abortSignal?: AbortSignal;
 }
 
 export interface CentrAiChatStreamResult {
@@ -48,61 +51,55 @@ export interface CentrAiChatStreamResult {
   sdkUiStream: ReadableStream<unknown>;
 }
 
+function chatParamsToCompiledRunPlan(params: CentrAiChatStreamParams): CompiledRunPlan {
+  const useMemory = params.postgresStore != null && params.memoryScope != null;
+  return {
+    planVersion: COMPILED_RUN_PLAN_VERSION,
+    instructions: params.instructions,
+    messages: params.messages,
+    limits: { maxSteps: params.maxSteps ?? DEFAULT_MAX_STEPS },
+    memory: useMemory
+      ? {
+          mode: 'mastra_pg',
+          thread: params.memoryScope!.thread,
+          resource: params.memoryScope!.resource,
+        }
+      : { mode: 'none' },
+    agentId: params.agentId ?? DEFAULT_AGENT_ID,
+    name: params.name ?? DEFAULT_NAME,
+  };
+}
+
+function chatParamsToAdapterDeps(params: CentrAiChatStreamParams): AdapterDeps {
+  return {
+    model: params.model,
+    ...(params.abortSignal != null ? { abortSignal: params.abortSignal } : {}),
+    ...(params.postgresStore != null
+      ? { mastra: { postgresStore: params.postgresStore } }
+      : {}),
+  };
+}
+
 /**
  * Runs the CentrAI Mastra agent for a chat **turn**: model loop + AI SDK v6 UI stream.
+ * Implemented via `createRuntimeAdapter({ kind: 'mastra' })` so other runtimes can share the same surface later.
  * Transcript persistence for users is the API’s job (Prisma). Mastra Memory here is only when callers pass `postgresStore` for non-UI runtime.
  */
 export async function createCentrAiChatStream(
   params: CentrAiChatStreamParams,
 ): Promise<CentrAiChatStreamResult> {
-  const {
-    instructions,
-    model,
-    messages,
-    agentId = DEFAULT_AGENT_ID,
-    name = DEFAULT_NAME,
-    maxSteps = DEFAULT_MAX_STEPS,
-    postgresStore,
-    memoryScope,
-  } = params;
+  const adapter = createRuntimeAdapter({ kind: 'mastra' });
+  const plan = chatParamsToCompiledRunPlan(params);
+  const deps = chatParamsToAdapterDeps(params);
 
-  const useMemory = postgresStore != null && memoryScope != null;
-  const memory = useMemory
-    ? new Memory({
-        storage: postgresStore,
-        vector: false,
-        options: {
-          generateTitle: false,
-          lastMessages: 50,
-          semanticRecall: false,
-        },
-      })
-    : undefined;
+  const supported = adapter.supports(plan);
+  if (!supported.ok) {
+    throw new AgentRuntimeError(supported.reason, { adapterId: adapter.id });
+  }
 
-  const mastraAgent = new Agent({
-    id: agentId,
-    name,
-    instructions,
-    model: model as ConstructorParameters<typeof Agent>[0]['model'],
-    ...(memory ? { memory } : {}),
-  });
-
-  const mastraOutput = await mastraAgent.stream(messages as MessageListInput, {
-    stopWhen: stepCountIs(maxSteps),
-    ...(useMemory
-      ? {
-          memory: {
-            thread: memoryScope.thread,
-            resource: memoryScope.resource,
-          },
-        }
-      : {}),
-  });
-
-  const sdkUiStream = toAISdkStream(mastraOutput, {
-    from: 'agent',
-    version: 'v6',
-  }) as ReadableStream<unknown>;
-
-  return { mastraOutput, sdkUiStream };
+  const out = await adapter.streamRun(plan, deps);
+  return {
+    mastraOutput: out.raw as MastraModelOutput,
+    sdkUiStream: out.uiStream,
+  };
 }

@@ -66,11 +66,3 @@ export function flattenRuntimeTools(tools: RuntimeTool[]): RuntimeTool[] {
   }
   return out;
 }
-
-export function listFunctionTools(tools: RuntimeTool[]): RuntimeFunctionTool[] {
-  return flattenRuntimeTools(tools).filter((t): t is RuntimeFunctionTool => t.type === 'function');
-}
-
-export function listMcpTools(tools: RuntimeTool[]): RuntimeMcpTool[] {
-  return flattenRuntimeTools(tools).filter((t): t is RuntimeMcpTool => t.type === 'mcp');
-}

@@ -1,18 +1,19 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Delete,
-  Patch,
-  Param,
+  BadRequestException,
   Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Param,
+  Patch,
+  Post,
   Query,
   Req,
   Res,
   UsePipes,
-  HttpCode,
-  HttpStatus,
-  BadRequestException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -50,10 +51,22 @@ import {
 } from '../common/swagger/schemas';
 import { apiEnvelopeSchema } from '../common/swagger/zod-to-openapi';
 
+function assistantTextFromUiMessage(message: UIMessage): string {
+  if (message.role !== 'assistant') {
+    return '';
+  }
+  return message.parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text' && typeof p.text === 'string')
+    .map((p) => p.text)
+    .join('');
+}
+
 @ApiTags('Chat')
 @ApiBearerAuth('bearer')
 @Controller('chat')
 export class ChatController {
+  private readonly logger = new Logger(ChatController.name);
+
   constructor(
     private readonly chatService: ChatService,
     private readonly providerService: ProviderService,
@@ -396,15 +409,71 @@ export class ChatController {
     const uiMessages: UIMessage[] = (messages ?? []) as UIMessage[];
     const modelMessages = await convertToModelMessages(uiMessages);
 
-    // User-visible transcript: Prisma conversation messages only. Mastra PG / Memory is for workflows & debug (see MASTRA_PG_ENABLED), not chat UI.
+    const abortController = new AbortController();
+    const stopModelIfClientDisconnects = () => {
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    };
+    req.on('close', stopModelIfClientDisconnects);
+
+    // User-visible transcript: Prisma conversation messages only (not Mastra memory / PG).
     const { mastraOutput, sdkUiStream } = await createCentrAiChatStream({
       instructions,
       model,
       messages: modelMessages,
+      abortSignal: abortController.signal,
     });
 
     const stream = createUIMessageStream({
       originalMessages: uiMessages,
+      onFinish: async ({ responseMessage }) => {
+        try {
+          const text = assistantTextFromUiMessage(responseMessage);
+          const clientDisconnected = abortController.signal.aborted;
+          if (clientDisconnected && text.length === 0) {
+            return;
+          }
+
+          let inputTokens: number | undefined;
+          let outputTokens: number | undefined;
+          try {
+            const usage = await mastraOutput.totalUsage;
+            inputTokens = usage?.inputTokens ?? undefined;
+            outputTokens = usage?.outputTokens ?? undefined;
+          } catch {
+            // Aborted or failed runs may not resolve usage.
+          }
+          const tokenCount =
+            inputTokens != null && outputTokens != null ? inputTokens + outputTokens : undefined;
+
+          if (assistantPersist.mode === 'update') {
+            await this.chatService.updateAssistantMessage(
+              assistantPersist.assistantMessageId,
+              convId,
+              text,
+              tokenCount,
+              inputTokens,
+              outputTokens,
+            );
+          } else {
+            await this.chatService.persistAssistantMessage(
+              convId,
+              text,
+              assistantPersist.parentUserMessageId,
+              tokenCount,
+              inputTokens,
+              outputTokens,
+            );
+          }
+
+          if (isNew) {
+            this.chatService.generateTitleAsync(convId);
+          }
+        } catch (err) {
+          this.logger.error('Failed to persist assistant message after UI stream finished', err);
+        }
+      },
       execute: async ({ writer }) => {
         if (isNew) {
           writer.write({
@@ -414,37 +483,6 @@ export class ChatController {
         }
 
         writer.merge(sdkUiStream as ReadableStream<InferUIMessageChunk<UIMessage>>);
-
-        const text = await mastraOutput.text;
-        const usage = await mastraOutput.totalUsage;
-        const inputTokens = usage?.inputTokens ?? undefined;
-        const outputTokens = usage?.outputTokens ?? undefined;
-        const tokenCount =
-          inputTokens != null && outputTokens != null ? inputTokens + outputTokens : undefined;
-
-        if (assistantPersist.mode === 'update') {
-          await this.chatService.updateAssistantMessage(
-            assistantPersist.assistantMessageId,
-            convId,
-            text,
-            tokenCount,
-            inputTokens,
-            outputTokens,
-          );
-        } else {
-          await this.chatService.persistAssistantMessage(
-            convId,
-            text,
-            assistantPersist.parentUserMessageId,
-            tokenCount,
-            inputTokens,
-            outputTokens,
-          );
-        }
-
-        if (isNew) {
-          this.chatService.generateTitleAsync(convId);
-        }
       },
     });
 
