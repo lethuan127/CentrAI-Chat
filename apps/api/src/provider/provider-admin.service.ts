@@ -25,7 +25,7 @@ interface WellKnownModel {
 }
 
 const WELL_KNOWN_MODELS: Record<string, WellKnownModel[]> = {
-  OPENAI: [
+  openai: [
     { id: 'gpt-5.4', name: 'GPT-5.4', contextWindow: 1050000, capabilities: { vision: true, function_calling: true, reasoning: true } },
     { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', contextWindow: 400000, capabilities: { vision: true, function_calling: true } },
     { id: 'gpt-5.4-nano', name: 'GPT-5.4 Nano', contextWindow: 400000, capabilities: { vision: true, function_calling: true } },
@@ -36,21 +36,21 @@ const WELL_KNOWN_MODELS: Record<string, WellKnownModel[]> = {
     { id: 'o3', name: 'o3', contextWindow: 200000, capabilities: { reasoning: true, vision: true, function_calling: true } },
     { id: 'o4-mini', name: 'o4-mini', contextWindow: 200000, capabilities: { reasoning: true, function_calling: true } },
   ],
-  ANTHROPIC: [
+  anthropic: [
     { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', contextWindow: 1000000, capabilities: { vision: true, function_calling: true, reasoning: true } },
     { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', contextWindow: 1000000, capabilities: { vision: true, function_calling: true, reasoning: true } },
     { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', contextWindow: 200000, capabilities: { vision: true, function_calling: true } },
     { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', contextWindow: 200000, capabilities: { vision: true, function_calling: true, reasoning: true } },
   ],
-  GOOGLE: [
+  google: [
     { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', contextWindow: 1000000, capabilities: { vision: true, function_calling: true, reasoning: true } },
     { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', contextWindow: 1000000, capabilities: { vision: true, function_calling: true } },
     { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash-Lite', contextWindow: 1000000, capabilities: { vision: true, function_calling: true } },
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextWindow: 1048576, capabilities: { vision: true, function_calling: true, reasoning: true } },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 1048576, capabilities: { vision: true, function_calling: true } },
   ],
-  OLLAMA: [],
-  CUSTOM: [],
+  ollama: [],
+  custom: [],
 };
 
 @Injectable()
@@ -211,7 +211,7 @@ export class ProviderAdminService {
     });
     if (!provider) throw new NotFoundException('Provider not found');
 
-    if (provider.type === 'OLLAMA') {
+    if (provider.type === 'ollama') {
       return this.syncOllamaModels(provider);
     }
 
@@ -282,14 +282,14 @@ export class ProviderAdminService {
 
     try {
       switch (provider.type) {
-        case 'OPENAI':
-        case 'CUSTOM':
+        case 'openai':
+        case 'custom':
           return this.testOpenAICompatible(apiKey, provider.baseUrl);
-        case 'ANTHROPIC':
+        case 'anthropic':
           return this.testAnthropic(apiKey);
-        case 'GOOGLE':
+        case 'google':
           return this.testGoogle(apiKey);
-        case 'OLLAMA':
+        case 'ollama':
           return this.testOllama(provider.baseUrl);
         default:
           return { ok: false, message: `Unknown provider type: ${provider.type}` };

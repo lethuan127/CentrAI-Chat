@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('ADMIN', 'DEVELOPER', 'USER');
 
@@ -8,7 +11,7 @@ CREATE TYPE "AuthProvider" AS ENUM ('LOCAL', 'GOOGLE', 'GITHUB');
 CREATE TYPE "MessageRole" AS ENUM ('USER', 'ASSISTANT', 'SYSTEM');
 
 -- CreateEnum
-CREATE TYPE "ProviderType" AS ENUM ('OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM');
+CREATE TYPE "ProviderType" AS ENUM ('openai', 'anthropic', 'google', 'ollama', 'custom');
 
 -- CreateEnum
 CREATE TYPE "AgentStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED');
@@ -124,6 +127,9 @@ CREATE TABLE "conversations" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "archivedAt" TIMESTAMP(3),
     "deletedAt" TIMESTAMP(3),
+    "active_leaf_message_id" TEXT,
+    "forked_from_conversation_id" TEXT,
+    "forked_from_message_id" TEXT,
 
     CONSTRAINT "conversations_pkey" PRIMARY KEY ("id")
 );
@@ -139,6 +145,7 @@ CREATE TABLE "messages" (
     "inputTokens" INTEGER,
     "outputTokens" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "parent_id" TEXT,
 
     CONSTRAINT "messages_pkey" PRIMARY KEY ("id")
 );
@@ -260,6 +267,9 @@ CREATE INDEX "messages_conversationId_idx" ON "messages"("conversationId");
 CREATE INDEX "messages_createdAt_idx" ON "messages"("createdAt");
 
 -- CreateIndex
+CREATE INDEX "messages_parent_id_idx" ON "messages"("parent_id");
+
+-- CreateIndex
 CREATE INDEX "providers_workspaceId_idx" ON "providers"("workspaceId");
 
 -- CreateIndex
@@ -317,10 +327,16 @@ ALTER TABLE "conversations" ADD CONSTRAINT "conversations_userId_fkey" FOREIGN K
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "agents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "conversations" ADD CONSTRAINT "conversations_active_leaf_message_id_fkey" FOREIGN KEY ("active_leaf_message_id") REFERENCES "messages"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "conversations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "messages" ADD CONSTRAINT "messages_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "messages"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "providers" ADD CONSTRAINT "providers_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

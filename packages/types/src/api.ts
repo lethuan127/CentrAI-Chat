@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeProviderTypeInput, providerTypeKeySchema } from './provider-type';
 import type { Role } from './models';
 
 // ─── Auth DTOs ──────────────────────────────────────────────
@@ -172,20 +173,25 @@ export type AgentQueryDto = z.infer<typeof agentQuerySchema>;
 
 const createProviderFields = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  type: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM']),
+  type: providerTypeKeySchema,
   baseUrl: z.string().url().optional().nullable(),
   apiKey: z.string().optional().nullable(),
   isEnabled: z.boolean().default(true),
   config: z.record(z.unknown()).optional().default({}),
 });
 
-/** Accepts optional `displayName` as alias for `name` (UI label / legacy clients). */
+/** Accepts optional `displayName` as alias for `name` (UI label / legacy clients). Normalizes `type` casing. */
 export const createProviderSchema = z.preprocess((raw) => {
   if (raw && typeof raw === 'object' && raw !== null) {
     const o = raw as Record<string, unknown>;
-    if (o.name == null && typeof o.displayName === 'string') {
-      return { ...o, name: o.displayName };
+    const next = { ...o };
+    if (next.name == null && typeof next.displayName === 'string') {
+      next.name = next.displayName;
     }
+    if (typeof next.type === 'string') {
+      next.type = normalizeProviderTypeInput(next.type);
+    }
+    return next;
   }
   return raw;
 }, createProviderFields);
@@ -205,7 +211,7 @@ export type UpdateProviderDto = z.infer<typeof updateProviderSchema>;
 export const providerQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  type: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM']).optional(),
+  type: z.preprocess(normalizeProviderTypeInput, providerTypeKeySchema.optional()),
 });
 
 export type ProviderQueryDto = z.infer<typeof providerQuerySchema>;

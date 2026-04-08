@@ -399,7 +399,12 @@ export class ChatController {
       assistantPersist = { mode: 'create', parentUserMessageId: userRow.id };
     }
 
-    const { model, system } = await this.providerService.resolveModelAndSystem(agentId, modelId, providerId);
+    const { model, system } = await this.providerService.resolveModelAndSystem(
+      agentId,
+      modelId,
+      providerId,
+      user.workspaceId,
+    );
 
     const sessionPreamble = await this.chatService.buildChatSessionPreamble(user.id, clientTimeZone);
     const instructions = sessionPreamble ? `${sessionPreamble}\n\n${system}` : system;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { providerTypeKeySchema, type ProviderTypeKey } from './provider-type';
 
 // ─── User ────────────────────────────────────────────────────
 
@@ -106,20 +107,20 @@ export type PublishedAgent = z.infer<typeof publishedAgentSchema>;
 // ─── Provider ────────────────────────────────────────────────
 
 export const ProviderType = {
-  OPENAI: 'OPENAI',
-  ANTHROPIC: 'ANTHROPIC',
-  GOOGLE: 'GOOGLE',
-  OLLAMA: 'OLLAMA',
-  CUSTOM: 'CUSTOM',
-} as const;
+  openai: 'openai',
+  anthropic: 'anthropic',
+  google: 'google',
+  ollama: 'ollama',
+  custom: 'custom',
+} as const satisfies Record<ProviderTypeKey, ProviderTypeKey>;
 
-export type ProviderType = (typeof ProviderType)[keyof typeof ProviderType];
+export type ProviderType = ProviderTypeKey;
 
 export const providerSchema = z.object({
   id: z.string().uuid(),
   workspaceId: z.string().uuid(),
   name: z.string(),
-  type: z.enum(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM']),
+  type: providerTypeKeySchema,
   baseUrl: z.string().nullable(),
   isEnabled: z.boolean(),
   config: z.record(z.unknown()).optional(),

@@ -29,11 +29,11 @@ enum MessageRole {
 }
 
 enum ProviderType {
-  OPENAI
-  ANTHROPIC
-  GOOGLE
-  OLLAMA
-  CUSTOM
+  openai
+  anthropic
+  google
+  ollama
+  custom
 }
 
 // ─── Workspace (v1: single default, v2: multi-tenant) ──────

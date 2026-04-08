@@ -1,10 +1,5 @@
 import { buildSystemPrompt, runtimeAgentDefinitionFromPersisted } from '@centrai/agent';
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
@@ -17,6 +12,18 @@ import { AgentStatus } from '../generated/prisma/enums.js';
 interface ModelAndSystem {
   model: LanguageModel;
   system: string;
+}
+
+const KNOWN_LLM_PROVIDER_TYPES = ['openai', 'anthropic', 'google', 'ollama', 'custom'] as const;
+
+function isKnownLlmProviderType(s: string): s is (typeof KNOWN_LLM_PROVIDER_TYPES)[number] {
+  return (KNOWN_LLM_PROVIDER_TYPES as readonly string[]).includes(s);
+}
+
+function looksLikeUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    s.trim(),
+  );
 }
 
 @Injectable()
@@ -37,6 +44,7 @@ export class ProviderService {
     agentId?: string | null,
     modelId?: string | null,
     providerId?: string | null,
+    workspaceId?: string | null,
   ): Promise<ModelAndSystem> {
     if (agentId) {
       const dbAgent = await this.prisma.agent.findFirst({
@@ -48,6 +56,7 @@ export class ProviderService {
         const model = await this.resolveLanguageModel(
           dbAgent.modelId,
           dbAgent.modelProvider,
+          dbAgent.workspaceId,
         );
         return { model, system };
       }
@@ -56,28 +65,29 @@ export class ProviderService {
     const system =
       'You are a helpful AI assistant in CentrAI-Chat, an open-source centralized AI conversation platform. ' +
       'Respond clearly and concisely.';
-    const model = await this.resolveLanguageModel(modelId, providerId);
+    const model = await this.resolveLanguageModel(modelId, providerId, workspaceId ?? null);
     return { model, system };
   }
 
   private async resolveLanguageModel(
     modelId?: string | null,
-    providerId?: string | null,
+    providerRef?: string | null,
+    workspaceId?: string | null,
   ): Promise<LanguageModel> {
-    // Try DB-configured provider first
-    if (providerId && modelId) {
-      const dbModel = await this.tryResolveFromDb(providerId, modelId);
+    // Try DB-configured provider first (UUID, type key like "openai", or exact provider name)
+    if (providerRef && modelId) {
+      const dbModel = await this.tryResolveFromProviderRef(providerRef, modelId, workspaceId ?? null);
       if (dbModel) return dbModel;
     }
 
     // If modelId looks like "provider/model", try to resolve from DB by provider type
     if (modelId?.includes('/')) {
-      const dbModel = await this.tryResolveFromModelString(modelId);
+      const dbModel = await this.tryResolveFromModelString(modelId, workspaceId ?? null);
       if (dbModel) return dbModel;
     }
 
     // Fall back to env-based resolution (direct SDK providers — not Vercel AI Gateway)
-    const modelString = this.resolveModelString(modelId, providerId);
+    const modelString = this.resolveModelString(modelId, providerRef);
     const fromEnv = this.createLanguageModelFromEnvString(modelString);
     if (fromEnv) return fromEnv;
 
@@ -87,13 +97,39 @@ export class ProviderService {
     );
   }
 
-  private async tryResolveFromDb(
-    providerId: string,
+  private async tryResolveFromProviderRef(
+    providerRef: string,
     modelId: string,
+    workspaceId: string | null,
   ): Promise<LanguageModel | null> {
-    const provider = await this.prisma.provider.findUnique({
-      where: { id: providerId },
-    });
+    const ref = providerRef.trim();
+    if (!ref) return null;
+
+    const wsWhere = workspaceId ? { workspaceId } : {};
+
+    const byId = looksLikeUuid(ref)
+      ? await this.prisma.provider.findFirst({
+          where: { id: ref, ...wsWhere },
+        })
+      : null;
+
+    const refKey = ref.toLowerCase();
+    const byKey =
+      isKnownLlmProviderType(refKey)
+        ? await this.prisma.provider.findFirst({
+            where: { type: refKey, isEnabled: true, ...wsWhere },
+            orderBy: { createdAt: 'asc' },
+          })
+        : null;
+
+    const provider =
+      byId ??
+      byKey ??
+      (await this.prisma.provider.findFirst({
+        where: { name: ref, isEnabled: true, ...wsWhere },
+        orderBy: { createdAt: 'asc' },
+      }));
+
     if (!provider || !provider.isEnabled) return null;
 
     const apiKey = provider.apiKeyEncrypted && this.encryptionKey
@@ -105,23 +141,19 @@ export class ProviderService {
 
   private async tryResolveFromModelString(
     modelString: string,
+    workspaceId: string | null,
   ): Promise<LanguageModel | null> {
     const [providerHint, ...rest] = modelString.split('/');
     const modelId = rest.join('/');
     if (!modelId) return null;
 
-    const typeMap: Record<string, string> = {
-      openai: 'OPENAI',
-      anthropic: 'ANTHROPIC',
-      google: 'GOOGLE',
-      ollama: 'OLLAMA',
-    };
+    const hint = providerHint.toLowerCase();
+    if (!isKnownLlmProviderType(hint)) return null;
 
-    const providerType = typeMap[providerHint.toLowerCase()];
-    if (!providerType) return null;
+    const wsWhere = workspaceId ? { workspaceId } : {};
 
     const provider = await this.prisma.provider.findFirst({
-      where: { type: providerType as never, isEnabled: true },
+      where: { type: hint, isEnabled: true, ...wsWhere },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -182,29 +214,29 @@ export class ProviderService {
     baseUrl?: string | null,
   ): LanguageModel {
     switch (providerType) {
-      case 'OPENAI': {
+      case 'openai': {
         const openai = createOpenAI({
           apiKey,
           ...(baseUrl ? { baseURL: baseUrl } : {}),
         });
         return openai(modelId);
       }
-      case 'ANTHROPIC': {
+      case 'anthropic': {
         const anthropic = createAnthropic({ apiKey });
         return anthropic(modelId);
       }
-      case 'GOOGLE': {
+      case 'google': {
         const google = createGoogleGenerativeAI({ apiKey });
         return google(modelId);
       }
-      case 'OLLAMA': {
+      case 'ollama': {
         const ollama = createOpenAI({
           apiKey: 'ollama',
           baseURL: baseUrl || 'http://localhost:11434/v1',
         });
         return ollama(modelId);
       }
-      case 'CUSTOM': {
+      case 'custom': {
         const custom = createOpenAI({
           apiKey: apiKey || '',
           ...(baseUrl ? { baseURL: baseUrl } : {}),

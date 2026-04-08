@@ -63,7 +63,7 @@ export class ProviderAdminController {
   @ApiOperation({ summary: 'List all configured providers (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20, max: 100)' })
-  @ApiQuery({ name: 'type', required: false, enum: ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'OLLAMA', 'CUSTOM'], description: 'Filter by provider type' })
+  @ApiQuery({ name: 'type', required: false, enum: ['openai', 'anthropic', 'google', 'ollama', 'custom'], description: 'Filter by provider type' })
   @ApiResponse({
     status: 200,
     description: 'Paginated provider list',

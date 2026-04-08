@@ -29,11 +29,11 @@ import {
 import { Switch } from '@/components/ui/switch';
 
 const PROVIDER_TYPES = [
-  { value: 'OPENAI', label: 'OpenAI', description: 'GPT-4o, GPT-4, o1, o3 series', color: 'text-green-600' },
-  { value: 'ANTHROPIC', label: 'Anthropic', description: 'Claude 4, 3.5 Sonnet, Haiku', color: 'text-orange-600' },
-  { value: 'GOOGLE', label: 'Google Gemini', description: 'Gemini Pro, Flash, Ultra', color: 'text-blue-600' },
-  { value: 'OLLAMA', label: 'Ollama', description: 'Local models (Llama, Mistral, Phi)', color: 'text-purple-600' },
-  { value: 'CUSTOM', label: 'Custom (OpenAI-compatible)', description: 'vLLM, LiteLLM, Together, etc.', color: 'text-gray-600' },
+  { value: 'openai', label: 'OpenAI', description: 'GPT-4o, GPT-4, o1, o3 series', color: 'text-green-600' },
+  { value: 'anthropic', label: 'Anthropic', description: 'Claude 4, 3.5 Sonnet, Haiku', color: 'text-orange-600' },
+  { value: 'google', label: 'Google Gemini', description: 'Gemini Pro, Flash, Ultra', color: 'text-blue-600' },
+  { value: 'ollama', label: 'Ollama', description: 'Local models (Llama, Mistral, Phi)', color: 'text-purple-600' },
+  { value: 'custom', label: 'Custom (OpenAI-compatible)', description: 'vLLM, LiteLLM, Together, etc.', color: 'text-gray-600' },
 ];
 
 function ProviderIcon({ type, className }: { type: string; className?: string }) {
@@ -73,8 +73,8 @@ function AddProviderDialog({
     const meta = PROVIDER_TYPES.find((t) => t.value === type);
     setProviderName(meta?.label ?? type);
 
-    if (type === 'OLLAMA') setBaseUrl('http://localhost:11434');
-    else if (type === 'OPENAI') setBaseUrl('');
+    if (type === 'ollama') setBaseUrl('http://localhost:11434');
+    else if (type === 'openai') setBaseUrl('');
     else setBaseUrl('');
 
     setStep('config');
@@ -97,8 +97,8 @@ function AddProviderDialog({
     }
   };
 
-  const needsApiKey = selectedType !== 'OLLAMA';
-  const needsBaseUrl = selectedType === 'OLLAMA' || selectedType === 'CUSTOM';
+  const needsApiKey = selectedType !== 'ollama';
+  const needsBaseUrl = selectedType === 'ollama' || selectedType === 'custom';
 
   return (
     <Dialog
@@ -155,7 +155,7 @@ function AddProviderDialog({
                       type={showKey ? 'text' : 'password'}
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      placeholder={selectedType === 'OPENAI' ? 'sk-...' : 'Enter API key'}
+                      placeholder={selectedType === 'openai' ? 'sk-...' : 'Enter API key'}
                       className="w-full rounded-md border border-border bg-transparent px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                     <button
@@ -173,12 +173,12 @@ function AddProviderDialog({
               {needsBaseUrl && (
                 <div>
                   <label className="mb-1 block text-xs font-medium">
-                    Base URL {selectedType !== 'OLLAMA' && selectedType !== 'CUSTOM' && '(optional)'}
+                    Base URL {selectedType !== 'ollama' && selectedType !== 'custom' && '(optional)'}
                   </label>
                   <input
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder={selectedType === 'OLLAMA' ? 'http://localhost:11434' : 'https://api.example.com/v1'}
+                    placeholder={selectedType === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com/v1'}
                     className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
