@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   Query,
-  UsePipes,
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
@@ -54,8 +53,10 @@ export class AgentController {
   @ApiOperation({ summary: 'Create a new agent (admin/developer)' })
   @ApiBody({ schema: CreateAgentBody, description: 'Agent definition' })
   @ApiResponse({ status: 201, description: 'Agent created', schema: apiEnvelopeSchema(AgentModel) })
-  @UsePipes(new ZodValidationPipe(createAgentSchema))
-  async create(@Body() dto: CreateAgentDto, @CurrentUser() user: JwtUser) {
+  async create(
+    @Body(new ZodValidationPipe(createAgentSchema)) dto: CreateAgentDto,
+    @CurrentUser() user: JwtUser,
+  ) {
     const agent = await this.agentService.create(dto, user.id, user.workspaceId);
     return { data: agent, error: null };
   }
@@ -124,10 +125,9 @@ export class AgentController {
   @ApiBody({ schema: UpdateAgentBody, description: 'Fields to update' })
   @ApiResponse({ status: 200, description: 'Agent updated', schema: apiEnvelopeSchema(AgentModel) })
   @ApiResponse({ status: 404, description: 'Agent not found' })
-  @UsePipes(new ZodValidationPipe(updateAgentSchema))
   async update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateAgentDto,
+    @Body(new ZodValidationPipe(updateAgentSchema)) dto: UpdateAgentDto,
     @CurrentUser() user: JwtUser,
   ) {
     const agent = await this.agentService.update(id, dto, user.id, user.workspaceId);

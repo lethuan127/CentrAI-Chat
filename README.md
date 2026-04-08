@@ -94,3 +94,4 @@ Source docs:
 - [Scope & Features](docs/SCOPE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [MVP Phase Plan](docs/MVP.md)
+- [Chat composer features (multimodal, web search, roadmap)](docs/FEATURES-CHAT-COMPOSER.md)

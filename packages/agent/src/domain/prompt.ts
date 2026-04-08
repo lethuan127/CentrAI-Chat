@@ -1,42 +1,31 @@
-import { formatSessionStateBlock, type SessionState } from './session-state.js';
-
-export interface SystemPromptInput {
-  role: string;
-  instructions: string;
-  expectedOutput?: string | null;
-  /** Shown to the model when you want the agent to know its display name. */
-  name?: string;
-  description?: string | null;
-  /** Injected as its own section when `includeSessionState` is true. */
-  sessionState?: SessionState | null;
-  includeSessionState?: boolean;
-}
+import type { RuntimeAgentDefinition } from './agent-definition.js';
+import { formatSessionStateBlock } from './session-state.js';
 
 /**
  * Builds a single system prompt string from role, instructions, and optional sections.
  * Matches the platform convention: markdown-ish headings per section.
  */
-export function buildSystemPrompt(input: SystemPromptInput): string {
+export function buildSystemPrompt(def: RuntimeAgentDefinition): string {
   const parts: string[] = [];
 
-  if (input.name?.trim()) {
-    parts.push(`# Agent\n**Name:** ${input.name.trim()}`);
+  if (def.name?.trim()) {
+    parts.push(`# Agent\n**Name:** ${def.name.trim()}`);
   }
-  if (input.description?.trim()) {
-    parts.push(`**Description:** ${input.description.trim()}`);
+  if (def.description?.trim()) {
+    parts.push(`**Description:** ${def.description.trim()}`);
   }
-  if (input.role?.trim()) {
-    parts.push(`# Role\n${input.role.trim()}`);
+  if (def.role?.trim()) {
+    parts.push(`# Role\n${def.role.trim()}`);
   }
-  if (input.instructions?.trim()) {
-    parts.push(`# Instructions\n${input.instructions.trim()}`);
+  if (def.instructions?.trim()) {
+    parts.push(`# Instructions\n${def.instructions.trim()}`);
   }
-  if (input.expectedOutput?.trim()) {
-    parts.push(`# Expected Output\n${input.expectedOutput.trim()}`);
+  if (def.expectedOutput?.trim()) {
+    parts.push(`# Expected Output\n${def.expectedOutput.trim()}`);
   }
 
-  if (input.includeSessionState) {
-    const block = formatSessionStateBlock(input.sessionState ?? null);
+  if (def.addSessionStateToContext) {
+    const block = formatSessionStateBlock(def.sessionState ?? null);
     if (block) {
       parts.push(`# Session state\n\`\`\`json\n${block}\n\`\`\``);
     }

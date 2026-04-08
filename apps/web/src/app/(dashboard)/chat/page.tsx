@@ -898,7 +898,6 @@ export default function ChatPage() {
 
   const handleNewChat = useCallback(() => {
     clearMessages();
-    setSelection({ type: 'default', label: 'Direct Chat' });
     router.push('/chat', { scroll: false });
   }, [clearMessages, router]);
 

@@ -1,4 +1,4 @@
-import { buildSystemPrompt } from '@centrai/agent';
+import { buildSystemPrompt, runtimeAgentDefinitionFromPersisted } from '@centrai/agent';
 import {
   Injectable,
   Logger,
@@ -264,14 +264,26 @@ export class ProviderService {
   }
 
   private buildInstructions(agent: {
+    name: string;
+    description: string | null;
     role: string;
     instructions: string;
-    expectedOutput?: string | null;
+    expectedOutput: string | null;
+    tools: unknown;
+    addSessionStateToContext: boolean;
+    maxTurnsMessageHistory: number | null;
   }): string {
-    return buildSystemPrompt({
-      role: agent.role,
-      instructions: agent.instructions,
-      expectedOutput: agent.expectedOutput,
-    });
+    return buildSystemPrompt(
+      runtimeAgentDefinitionFromPersisted({
+        name: agent.name,
+        description: agent.description,
+        role: agent.role,
+        instructions: agent.instructions,
+        expectedOutput: agent.expectedOutput,
+        tools: agent.tools,
+        addSessionStateToContext: agent.addSessionStateToContext,
+        maxTurnsMessageHistory: agent.maxTurnsMessageHistory,
+      }),
+    );
   }
 }

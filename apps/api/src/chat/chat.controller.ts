@@ -13,7 +13,6 @@ import {
   Query,
   Req,
   Res,
-  UsePipes,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -74,12 +73,11 @@ export class ChatController {
 
   @Post('conversations')
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new ZodValidationPipe(createConversationSchema))
   @ApiOperation({ summary: 'Create a new conversation' })
   @ApiBody({ schema: CreateConversationBody, description: 'Conversation options (agent, model, title)' })
   @ApiResponse({ status: 201, description: 'Conversation created', schema: apiEnvelopeSchema(ConversationModel) })
   async createConversation(
-    @Body() dto: CreateConversationDto,
+    @Body(new ZodValidationPipe(createConversationSchema)) dto: CreateConversationDto,
     @CurrentUser() user: { id: string; workspaceId: string },
   ) {
     const conversation = await this.chatService.createConversation(user.id, user.workspaceId, dto);

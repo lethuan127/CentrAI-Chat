@@ -7,7 +7,6 @@ export {
 } from './compile/compiled-run-plan.js';
 export { type RequestContext } from './compile/request-context.js';
 export {
-  definitionToSystemPromptInput,
   mergeRunContext,
   runtimeAgentDefinitionFromPersisted,
   systemPromptFromDefinition,
@@ -21,7 +20,7 @@ export {
   type ChatRole,
   type SliceHistoryOptions,
 } from './domain/message.js';
-export { buildSystemPrompt, type SystemPromptInput } from './domain/prompt.js';
+export { buildSystemPrompt } from './domain/prompt.js';
 export { formatSessionStateBlock, type SessionState } from './domain/session-state.js';
 export {
   flattenRuntimeTools,

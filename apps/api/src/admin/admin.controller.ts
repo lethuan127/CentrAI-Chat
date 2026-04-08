@@ -5,7 +5,6 @@ import {
   Param,
   Body,
   Query,
-  UsePipes,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import {
@@ -155,9 +154,8 @@ export class AdminController {
   @ApiOperation({ summary: 'Update system settings (admin only)' })
   @ApiBody({ schema: UpdateSystemSettingsBody, description: 'Settings to update' })
   @ApiResponse({ status: 200, description: 'Updated system settings', schema: apiEnvelopeSchema(SystemSettingsSchema) })
-  @UsePipes(new ZodValidationPipe(updateSystemSettingsSchema))
   async updateSettings(
-    @Body() dto: UpdateSystemSettingsDto,
+    @Body(new ZodValidationPipe(updateSystemSettingsSchema)) dto: UpdateSystemSettingsDto,
     @CurrentUser() user: { workspaceId: string },
   ) {
     const settings = await this.adminService.updateSystemSettings(user.workspaceId, dto);
