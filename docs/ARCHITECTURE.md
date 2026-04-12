@@ -74,7 +74,7 @@ Owns the lifecycle of conversations and messages.
 
 **Responsibilities:**
 - Create, list, archive, delete conversations
-- Append user/assistant/system messages to a conversation
+- Append user/assistant/system/tool messages to a conversation, tagged by `ContentType` (`TEXT`, `THINKING`, `TOOL_CALL`, `TOOL_RESULT`)
 - Stream assistant responses back to the client via SSE (Server-Sent Events)
 - Manage conversation branching (edit-and-regenerate creates a fork)
 - Persist token usage metadata per message
@@ -282,7 +282,9 @@ User types message in Next.js UI
         │
         ▼
 [6] On stream completion:
-    → Chat Service persists full assistant message
+    → Chat Service persists full assistant message (role: ASSISTANT, contentType: TEXT)
+    → Chat Service persists reasoning blocks (contentType: THINKING) as child rows
+    → Chat Service persists tool calls / results (role: TOOL, contentType: TOOL_CALL / TOOL_RESULT) as child rows
     → Chat Service records token usage
     → Emits audit event + analytics event (async)
         │

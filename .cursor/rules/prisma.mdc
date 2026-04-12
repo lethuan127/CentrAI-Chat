@@ -45,6 +45,17 @@ enum AgentStatus {
 - Never use `db push` or `synchronize: true` in production.
 - Migration names should be descriptive: `add-agent-status-field`, not `migration-1`.
 
+## Agent Migration Policy
+
+**Never run `prisma migrate dev` or `prisma generate` automatically.**
+
+When a schema change is needed:
+1. Update `apps/api/prisma/schema.prisma` only.
+2. Tell the user what changed and show the suggested migration command.
+3. Stop — do not execute the migration.
+
+Only run migration or generation commands when the user explicitly says so (e.g. "run the migration", "generate", "apply it").
+
 ## Security
 
 - API keys and secrets: encrypt before storing (AES-256). Never store plaintext.

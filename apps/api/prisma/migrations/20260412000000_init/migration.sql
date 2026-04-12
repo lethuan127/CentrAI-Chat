@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('ADMIN', 'DEVELOPER', 'USER');
 
@@ -5,7 +8,10 @@ CREATE TYPE "Role" AS ENUM ('ADMIN', 'DEVELOPER', 'USER');
 CREATE TYPE "AuthProvider" AS ENUM ('LOCAL', 'GOOGLE', 'GITHUB');
 
 -- CreateEnum
-CREATE TYPE "MessageRole" AS ENUM ('USER', 'ASSISTANT', 'SYSTEM');
+CREATE TYPE "MessageRole" AS ENUM ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL');
+
+-- CreateEnum
+CREATE TYPE "ContentType" AS ENUM ('TEXT', 'THINKING', 'TOOL_CALL');
 
 -- CreateEnum
 CREATE TYPE "AgentStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED');
@@ -139,6 +145,13 @@ CREATE TABLE "messages" (
     "outputTokens" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "parent_id" TEXT,
+    "content_type" "ContentType" NOT NULL DEFAULT 'TEXT',
+    "tool_call_id" TEXT,
+    "tool_name" TEXT,
+    "tool_args" JSONB,
+    "tool_result" JSONB,
+    "tool_progress" JSONB,
+    "duration_ms" INTEGER,
 
     CONSTRAINT "messages_pkey" PRIMARY KEY ("id")
 );
@@ -230,6 +243,9 @@ CREATE INDEX "messages_createdAt_idx" ON "messages"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "messages_parent_id_idx" ON "messages"("parent_id");
+
+-- CreateIndex
+CREATE INDEX "messages_tool_call_id_idx" ON "messages"("tool_call_id");
 
 -- CreateIndex
 CREATE INDEX "audit_logs_workspaceId_idx" ON "audit_logs"("workspaceId");

@@ -43,22 +43,14 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { ChatService } from './chat.service';
 import { LlmService } from '../llm';
+import { extractMessageParts } from './message-parts';
+import type { ExtractedParts } from './message-parts';
 import {
   CreateConversationBody,
   ConversationModel,
   MessageModel,
 } from '../common/swagger/schemas';
 import { apiEnvelopeSchema } from '../common/swagger/zod-to-openapi';
-
-function assistantTextFromUiMessage(message: UIMessage): string {
-  if (message.role !== 'assistant') {
-    return '';
-  }
-  return message.parts
-    .filter((p): p is { type: 'text'; text: string } => p.type === 'text' && typeof p.text === 'string')
-    .map((p) => p.text)
-    .join('');
-}
 
 @ApiTags('Chat')
 @ApiBearerAuth('bearer')
@@ -252,6 +244,29 @@ export class ChatController {
     res.send(result.content);
   }
 
+  private async persistMessageParts(
+    convId: string,
+    assistantMessageId: string,
+    parts: ExtractedParts,
+    progressMap: Map<string, Array<{ label: string; pct: number; ts: number }>>,
+  ): Promise<void> {
+    for (const t of parts.thinking) {
+      await this.chatService.persistThinkingMessage(convId, t.reasoning, assistantMessageId);
+    }
+
+    for (const inv of parts.toolInvocations) {
+      await this.chatService.persistToolMessage(
+        convId,
+        assistantMessageId,
+        inv.toolCallId,
+        inv.toolName,
+        inv.args,
+        inv.result,
+        progressMap.get(inv.toolCallId),
+      );
+    }
+  }
+
   @Post('messages')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -428,6 +443,9 @@ export class ChatController {
     };
     req.on('close', stopModelIfClientDisconnects);
 
+    // Collect progress events per toolCallId during the stream
+    const progressMap = new Map<string, Array<{ label: string; pct: number; ts: number }>>();
+
     // Step 1 (architecture §3): build the Mastra Agent (tools + memory wired here when needed).
     const agent = await createMastraAgent({
       definition,
@@ -447,9 +465,9 @@ export class ChatController {
       originalMessages: uiMessages,
       onFinish: async ({ responseMessage }) => {
         try {
-          const text = assistantTextFromUiMessage(responseMessage);
+          const parts = extractMessageParts(responseMessage);
           const clientDisconnected = abortController.signal.aborted;
-          if (clientDisconnected && text.length === 0) {
+          if (clientDisconnected && parts.text.length === 0 && parts.toolInvocations.length === 0) {
             return;
           }
 
@@ -465,31 +483,36 @@ export class ChatController {
           const tokenCount =
             inputTokens != null && outputTokens != null ? inputTokens + outputTokens : undefined;
 
+          let assistantMessageId: string;
           if (assistantPersist.mode === 'update') {
-            await this.chatService.updateAssistantMessage(
+            const updated = await this.chatService.updateAssistantMessage(
               assistantPersist.assistantMessageId,
               convId,
-              text,
+              parts.text,
               tokenCount,
               inputTokens,
               outputTokens,
             );
+            assistantMessageId = updated.id;
           } else {
-            await this.chatService.persistAssistantMessage(
+            const row = await this.chatService.persistAssistantMessage(
               convId,
-              text,
+              parts.text,
               assistantPersist.parentUserMessageId,
               tokenCount,
               inputTokens,
               outputTokens,
             );
+            assistantMessageId = row.id;
           }
+
+          await this.persistMessageParts(convId, assistantMessageId, parts, progressMap);
 
           if (isNew) {
             this.chatService.generateTitleAsync(convId);
           }
         } catch (err) {
-          this.logger.error('Failed to persist assistant message after UI stream finished', err);
+          this.logger.error('Failed to persist message parts after UI stream finished', err);
         }
       },
       execute: async ({ writer }) => {
@@ -500,7 +523,26 @@ export class ChatController {
           });
         }
 
-        writer.merge(sdkUiStream as ReadableStream<InferUIMessageChunk<UIMessage>>);
+        const progressTap = new TransformStream({
+          transform(chunk, controller) {
+            const c = chunk as { type?: string; data?: { toolCallId?: string; label?: string; pct?: number } };
+            if (c?.type === 'data-toolProgress' && c.data?.toolCallId) {
+              const { toolCallId, label = '', pct = 0 } = c.data;
+              const events = progressMap.get(toolCallId) ?? [];
+              if (events.length < 100) {
+                events.push({ label, pct, ts: Date.now() });
+                progressMap.set(toolCallId, events);
+              }
+            }
+            controller.enqueue(chunk);
+          },
+        });
+
+        writer.merge(
+          (sdkUiStream as ReadableStream<InferUIMessageChunk<UIMessage>>).pipeThrough(
+            progressTap as TransformStream<InferUIMessageChunk<UIMessage>, InferUIMessageChunk<UIMessage>>,
+          ),
+        );
       },
     });
 

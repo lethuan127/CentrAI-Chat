@@ -102,7 +102,7 @@ Phases can overlap where there are no dependency arrows (e.g. 3+4 in parallel, 5
 
 | # | Task | App | Details |
 |---|---|---|---|
-| 3.1 | Prisma Conversation & Message models | `apps/api` | `Conversation { id, title, userId, agentId, modelId, providerId, createdAt, updatedAt }`, `Message { id, conversationId, role, content, tokenCount, createdAt }`. |
+| 3.1 | Prisma Conversation & Message models | `apps/api` | `Conversation { id, title, userId, agentId, modelId, providerId, createdAt, updatedAt }`, `Message { id, conversationId, role(USER\|ASSISTANT\|SYSTEM\|TOOL), contentType(TEXT\|THINKING\|TOOL_CALL\|TOOL_RESULT), content, tokenCount, createdAt }`. |
 | 3.2 | Chat service | `apps/api` | Create conversation, append message, retrieve messages with pagination. |
 | 3.3 | Message router | `apps/api` | Resolve agent config → build prompt context → call provider adapter → stream tokens. End user never sees the system prompt or agent internals. |
 | 3.4 | SSE streaming endpoint | `apps/api` | `POST /api/v1/chat/messages` returns `text/event-stream` with `token` / `done` / `error` / `stopped` events. `POST /api/v1/chat/messages/:id/stop` cancels an active stream. Auth via Bearer token. |

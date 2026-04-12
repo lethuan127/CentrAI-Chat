@@ -42,7 +42,6 @@ export function buildSystemPrompt(
   const toolEntries = resolvedTools ? Object.values(resolvedTools) : [];
   if (toolEntries.length > 0) {
     sections.push('');
-    sections.push('## Available Tools');
 
     // Toolkit-level instructions come first so the LLM understands each
     // toolkit's purpose before reading individual tool schemas.
@@ -53,17 +52,6 @@ export function buildSystemPrompt(
           sections.push('');
           sections.push(inst);
         }
-      }
-    }
-
-    for (const tool of toolEntries) {
-      sections.push('');
-      sections.push(`### ${tool.id}`);
-      sections.push(tool.description);
-      const paramBlock = formatToolParams(tool);
-      if (paramBlock) {
-        sections.push('Parameters:');
-        sections.push(paramBlock);
       }
     }
   } else if (definition.toolRefs.length > 0) {

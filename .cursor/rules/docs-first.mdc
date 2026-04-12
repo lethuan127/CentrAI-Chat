@@ -1,0 +1,47 @@
+---
+description: Documentation-first development — docs must be written AND approved by the user before any code is implemented
+alwaysApply: true
+---
+
+# Documentation-First Development
+
+**Hard rule: no code is written until the design doc has been presented to the user and explicitly approved.**
+
+Write the doc → show the user → wait for approval → then implement.
+
+## Approval Gate
+
+```
+❌ Write doc + implement in the same step
+❌ Ask "should I proceed?" and continue without a clear "yes"
+✅ Present the doc, stop, wait for the user to approve before writing any code
+```
+
+The agent must treat user approval as a required checkpoint. If the user says "looks good", "approved", "go ahead", or similar — proceed. Otherwise, revise the doc.
+
+## When to Write Docs First
+
+| Change type | What to write |
+|---|---|
+| New feature / module | Design doc in `docs/` — problem, design, trade-offs |
+| New API endpoint | Endpoint spec — method, path, request/response shape, auth |
+| Architecture decision | ADR entry in `docs/ARCHITECTURE.md` |
+| MVP phase completion | Updated acceptance criteria in `docs/MVP.md` |
+| New concept / domain term | Definition added to Key Domain Concepts in `docs/ARCHITECTURE.md` |
+
+## docs/ Ownership
+
+- `docs/SCOPE.md` — platform scope, role matrix, v1 vs v2 features
+- `docs/ARCHITECTURE.md` — tech stack, module design, data flows
+- `docs/MVP.md` — 8-phase delivery plan with acceptance criteria
+- `docs/adr/` — architecture decision records (create if doesn't exist)
+
+## AI Agent Sequence
+
+For every non-trivial feature:
+1. Read `docs/ARCHITECTURE.md` and `docs/MVP.md`
+2. Draft the design doc or spec
+3. **Present it to the user and stop — do not write code yet**
+4. Revise if the user requests changes
+5. Implement only after receiving explicit approval
+6. Ship doc update and code in the same change

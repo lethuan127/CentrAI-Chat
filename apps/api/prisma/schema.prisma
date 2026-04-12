@@ -26,6 +26,13 @@ enum MessageRole {
   USER
   ASSISTANT
   SYSTEM
+  TOOL
+}
+
+enum ContentType {
+  TEXT
+  THINKING
+  TOOL_CALL
 }
 
 // ─── Workspace (v1: single default, v2: multi-tenant) ──────
@@ -216,9 +223,18 @@ model Message {
   children       Message[]    @relation("MessageThread")
   activeLeafFor  Conversation[] @relation("ConversationActiveLeaf")
 
+  contentType    ContentType  @default(TEXT) @map("content_type")
+  toolCallId     String?      @map("tool_call_id")
+  toolName       String?      @map("tool_name")
+  toolArgs       Json?        @map("tool_args")
+  toolResult     Json?        @map("tool_result")
+  toolProgress   Json?        @map("tool_progress")
+  durationMs     Int?         @map("duration_ms")
+
   @@index([conversationId])
   @@index([createdAt])
   @@index([parentId])
+  @@index([toolCallId])
   @@map("messages")
 }
 

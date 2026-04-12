@@ -17,6 +17,19 @@ export interface BranchGraphMessage {
   parentId?: string | null;
 }
 
+interface ApiMessageRow {
+  id: string;
+  role: string;
+  content: string;
+  contentType?: string | null;
+  createdAt: string;
+  parentId?: string | null;
+  toolCallId?: string | null;
+  toolName?: string | null;
+  toolArgs?: unknown;
+  toolResult?: unknown;
+}
+
 interface UseChatOptions {
   agentId?: string;
   modelId?: string;
@@ -53,17 +66,82 @@ interface UseChatReturn {
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
 }
 
-function toUiMessage(msg: {
-  id: string;
-  role: string;
-  content: string;
-  createdAt: string;
-}): UIMessage {
+/**
+ * Reconstruct UIMessage.parts from a set of API rows.
+ * Sub-rows (THINKING, TOOL_CALL) are children of an ASSISTANT TEXT row and carry
+ * the reasoning and tool invocation data needed to re-hydrate the parts array.
+ */
+function buildUiMessage(main: ApiMessageRow, children: ApiMessageRow[]): UIMessage {
+  const role = main.role.toLowerCase() as 'user' | 'assistant';
+
+  if (role === 'user') {
+    return {
+      id: main.id,
+      role: 'user',
+      parts: [{ type: 'text' as const, text: main.content }],
+    } as UIMessage;
+  }
+
+  // Build parts in stream order: reasoning first, then tools, then text
+  const parts: Record<string, unknown>[] = [];
+
+  for (const child of children) {
+    if (child.contentType === 'THINKING') {
+      // ReasoningUIPart in AI SDK v6 uses `.text`
+      parts.push({ type: 'reasoning', text: child.content });
+    } else if (
+      child.contentType === 'TOOL_CALL' &&
+      child.toolCallId &&
+      child.toolName
+    ) {
+      // DynamicToolUIPart with state output-available
+      parts.push({
+        type: 'dynamic-tool',
+        state: 'output-available',
+        toolCallId: child.toolCallId,
+        toolName: child.toolName,
+        input: child.toolArgs ?? null,
+        output: child.toolResult ?? null,
+      });
+    }
+  }
+
+  if (main.content) {
+    parts.push({ type: 'text' as const, text: main.content });
+  }
+
   return {
-    id: msg.id,
-    role: msg.role.toLowerCase() as 'user' | 'assistant',
-    parts: [{ type: 'text' as const, text: msg.content }],
+    id: main.id,
+    role: 'assistant',
+    parts,
   } as UIMessage;
+}
+
+/**
+ * Convert a flat list of API rows (including THINKING + TOOL_CALL sub-rows)
+ * into hydrated UIMessages. Sub-rows are merged into the parent ASSISTANT row's parts.
+ */
+function hydrateMessages(rows: ApiMessageRow[]): UIMessage[] {
+  // Separate main path rows from sub-rows
+  const mainRows = rows.filter(
+    (r) => !r.contentType || r.contentType === 'TEXT',
+  );
+  const subRows = rows.filter(
+    (r) => r.contentType === 'THINKING' || r.contentType === 'TOOL_CALL',
+  );
+
+  // Index sub-rows by parentId
+  const childrenByParent = new Map<string, ApiMessageRow[]>();
+  for (const sub of subRows) {
+    if (!sub.parentId) continue;
+    const arr = childrenByParent.get(sub.parentId) ?? [];
+    arr.push(sub);
+    childrenByParent.set(sub.parentId, arr);
+  }
+
+  return mainRows
+    .filter((r) => r.role === 'USER' || r.role === 'ASSISTANT')
+    .map((row) => buildUiMessage(row, childrenByParent.get(row.id) ?? []));
 }
 
 function browserDefaultTimeZone(): string | undefined {
@@ -101,27 +179,25 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     ) => {
       if (!opts?.silent) setIsLoadingHistory(true);
       try {
-        const envelope = await apiClient.get<
-          Array<{
-            id: string;
-            role: string;
-            content: string;
-            createdAt: string;
-            parentId?: string | null;
-          }>
-        >(`/chat/conversations/${id}/messages?limit=500`);
+        const envelope = await apiClient.get<ApiMessageRow[]>(
+          `/chat/conversations/${id}/messages?limit=500`,
+        );
 
         const path = envelope.data;
         const meta = envelope.meta ?? {};
-        const all = (meta.allMessages as BranchGraphMessage[] | undefined) ?? path;
 
-        setBranchGraph(Array.isArray(all) ? all : []);
+        // allMessages (for branch graph) is always main-role rows only
+        const rawAll = (meta.allMessages as ApiMessageRow[] | undefined) ?? path;
+        const graphRows = rawAll.filter(
+          (m) => !m.contentType || m.contentType === 'TEXT',
+        );
+        setBranchGraph(Array.isArray(graphRows) ? graphRows : []);
         setConversationMeta({
           modelId: (meta.modelId as string | null | undefined) ?? null,
           agentName: (meta.agentName as string | null | undefined) ?? null,
         });
 
-        const uiMessages: UIMessage[] = path.map((msg) => toUiMessage(msg));
+        const uiMessages = hydrateMessages(path);
         setAiMessages(uiMessages);
         setConversationId(id);
       } catch {

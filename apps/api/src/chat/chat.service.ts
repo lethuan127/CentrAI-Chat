@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma';
 import { LlmService } from '../llm';
-import { MessageRole, AgentStatus } from '../generated/prisma/enums.js';
+import { MessageRole, ContentType, AgentStatus } from '../generated/prisma/enums.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import type { ConversationQueryDto } from '@centrai/types';
 import type { Message as MessageRow } from '../generated/prisma/client.js';
 
@@ -234,8 +235,28 @@ export class ChatService {
     });
 
     const total = await this.prisma.message.count({ where: { conversationId } });
-    const path = this.buildMessagePath(all, conv?.activeLeafMessageId ?? null);
-    const effectiveLeaf = path.length > 0 ? path[path.length - 1]!.id : null;
+    const rawPath = this.buildMessagePath(all, conv?.activeLeafMessageId ?? null);
+
+    // Always expand tool/thinking children of each assistant row on the active path
+    const byParent = new Map<string, MessageRow[]>();
+    for (const m of all) {
+      if (m.parentId) {
+        const siblings = byParent.get(m.parentId) ?? [];
+        siblings.push(m);
+        byParent.set(m.parentId, siblings);
+      }
+    }
+    const path: MessageRow[] = [];
+    for (const msg of rawPath) {
+      path.push(msg);
+      for (const child of byParent.get(msg.id) ?? []) {
+        if (child.contentType !== 'TEXT') {
+          path.push(child);
+        }
+      }
+    }
+
+    const effectiveLeaf = rawPath.length > 0 ? rawPath[rawPath.length - 1]!.id : null;
 
     return {
       items: path,
@@ -502,7 +523,27 @@ export class ChatService {
       orderBy: { createdAt: 'asc' },
       take: 2000,
     });
-    const path = this.buildMessagePath(all, conversation.activeLeafMessageId);
+    const rawPath = this.buildMessagePath(all, conversation.activeLeafMessageId);
+
+    // For export, include tool/thinking children of each assistant row
+    const byParent = new Map<string, MessageRow[]>();
+    for (const m of all) {
+      if (m.parentId) {
+        const siblings = byParent.get(m.parentId) ?? [];
+        siblings.push(m);
+        byParent.set(m.parentId, siblings);
+      }
+    }
+    const path: MessageRow[] = [];
+    for (const msg of rawPath) {
+      path.push(msg);
+      const children = byParent.get(msg.id) ?? [];
+      for (const child of children) {
+        if (child.contentType !== 'TEXT') {
+          path.push(child);
+        }
+      }
+    }
 
     const title = conversation.title || 'Untitled Conversation';
     const payload = { ...conversation, messages: path };
@@ -550,7 +591,15 @@ export class ChatService {
       agent: { name: string } | null;
       modelId: string | null;
       createdAt: Date;
-      messages: Array<{ role: string; content: string; createdAt: Date }>;
+      messages: Array<{
+        role: string;
+        content: string;
+        contentType?: string;
+        toolName?: string | null;
+        toolArgs?: unknown;
+        toolResult?: unknown;
+        createdAt: Date;
+      }>;
     },
     title: string,
   ) {
@@ -561,6 +610,20 @@ export class ChatService {
     lines.push(`**Date:** ${conversation.createdAt.toISOString()}  `, '---', '');
 
     for (const msg of conversation.messages) {
+      if (msg.contentType === 'THINKING') {
+        lines.push(`> 💭 *Thinking*`, `> ${msg.content.replace(/\n/g, '\n> ')}`, '');
+        continue;
+      }
+      if (msg.contentType === 'TOOL_CALL') {
+        const argsStr = msg.toolArgs != null ? JSON.stringify(msg.toolArgs) : '';
+        const resultStr = msg.toolResult != null ? JSON.stringify(msg.toolResult) : msg.content;
+        lines.push(
+          `> 🔧 **Tool: ${msg.toolName ?? 'unknown'}** (\`${argsStr}\`)`,
+          `> Result: \`${resultStr}\``,
+          '',
+        );
+        continue;
+      }
       const speaker = msg.role === 'USER' ? '**You**' : msg.role === 'ASSISTANT' ? '**Assistant**' : '**System**';
       lines.push(`### ${speaker}`, '', msg.content, '');
     }
@@ -650,6 +713,50 @@ export class ChatService {
     });
 
     return message;
+  }
+
+  async persistThinkingMessage(
+    conversationId: string,
+    reasoning: string,
+    parentAssistantMessageId: string,
+  ): Promise<MessageRow> {
+    return this.prisma.message.create({
+      data: {
+        conversationId,
+        role: MessageRole.ASSISTANT,
+        contentType: ContentType.THINKING,
+        content: reasoning,
+        parentId: parentAssistantMessageId,
+      },
+    });
+  }
+
+  async persistToolMessage(
+    conversationId: string,
+    parentAssistantMessageId: string,
+    toolCallId: string,
+    toolName: string,
+    toolArgs: unknown,
+    toolResult: unknown,
+    progress?: Array<{ label: string; pct: number; ts: number }>,
+    durationMs?: number,
+  ): Promise<MessageRow> {
+    const cappedProgress = progress ? progress.slice(0, 100) : undefined;
+    return this.prisma.message.create({
+      data: {
+        conversationId,
+        role: MessageRole.TOOL,
+        contentType: ContentType.TOOL_CALL,
+        content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+        parentId: parentAssistantMessageId,
+        toolCallId,
+        toolName,
+        toolArgs: toolArgs as Prisma.InputJsonValue,
+        toolResult: toolResult as Prisma.InputJsonValue,
+        toolProgress: cappedProgress ? (cappedProgress as Prisma.InputJsonValue) : undefined,
+        durationMs,
+      },
+    });
   }
 
   async updateAssistantMessage(

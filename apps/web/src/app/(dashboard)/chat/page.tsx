@@ -224,7 +224,7 @@ function ChatMessageItem({
 
   // Collect reasoning parts (thinking blocks from extended-thinking models)
   const reasoningParts = message.parts.filter(
-    (p): p is { type: 'reasoning'; reasoning: string } => p.type === 'reasoning',
+    (p): p is { type: 'reasoning'; text: string } => p.type === 'reasoning',
   );
 
   // Collect tool-call parts — both statically-typed ("tool-<name>") and dynamic ("dynamic-tool")
@@ -275,14 +275,14 @@ function ChatMessageItem({
         ) : (
           <>
             {/* Reasoning / thinking blocks */}
-            {reasoningParts.length > 0 && (
-              <Reasoning isStreaming={isReasoningStreaming}>
-                <ReasoningTrigger />
-                <ReasoningContent>
-                  {reasoningParts.map((p) => p.reasoning).join('\n\n')}
-                </ReasoningContent>
-              </Reasoning>
-            )}
+                  {reasoningParts.length > 0 && (
+                    <Reasoning isStreaming={isReasoningStreaming}>
+                      <ReasoningTrigger />
+                      <ReasoningContent>
+                        {reasoningParts.map((p) => p.text).join('\n\n')}
+                      </ReasoningContent>
+                    </Reasoning>
+                  )}
 
             {/* Tool call progress */}
             {toolParts.map((part, i) =>
