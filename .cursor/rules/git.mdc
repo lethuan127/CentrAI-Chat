@@ -1,0 +1,66 @@
+---
+description: Git conventions and workflow rules for the CentrAI-Chat monorepo
+alwaysApply: true
+---
+
+# Git Conventions
+
+## Commit Messages — Conventional Commits
+
+Format: `<type>(<scope>): <subject>`
+
+| Type | When to use |
+|------|-------------|
+| `feat` | New feature or behaviour |
+| `fix` | Bug fix |
+| `refactor` | Code change that is neither feat nor fix |
+| `chore` | Tooling, deps, build, config changes |
+| `docs` | Documentation only |
+| `test` | Adding or fixing tests |
+| `perf` | Performance improvement |
+| `ci` | CI/CD pipeline changes |
+
+**Scopes** (pick the closest): `api`, `web`, `worker`, `ui`, `sdk`, `config`, `types`, `prisma`, `auth`, `agents`, `providers`, `chat`, `infra`
+
+```
+# ✅ Good
+feat(agents): add draft → published status transition
+fix(api): prevent system prompt leakage in user chat endpoint
+chore(prisma): add workspaceId index on Message table
+
+# ❌ Bad
+updated stuff
+fixed bug
+WIP
+```
+
+- Subject: imperative mood, no period, ≤ 72 chars
+- Body (optional): explain **why**, not what — separate from subject with a blank line
+- Breaking changes: add `!` after scope → `feat(api)!: rename provider enum values`
+
+## Branch Naming
+
+`<type>/<short-description>` — all lowercase, hyphens only
+
+```
+feat/agent-tool-calling
+fix/sse-reconnect-loop
+chore/upgrade-prisma-6
+docs/adr-queue-design
+```
+
+- Branch off `main` unless told otherwise
+- Keep branches short-lived; delete after merge
+
+## PR Rules
+
+- Title follows the same Conventional Commits format as the squash-merge commit
+- Body must include: **Summary** (what & why) and **Test plan** (how to verify)
+- One logical concern per PR — split if it touches unrelated areas
+- Never force-push to `main`
+
+## Monorepo Notes
+
+- Scope commits to the affected app/package — don't use a generic scope when a specific one fits
+- Lockfile (`pnpm-lock.yaml`) must be committed together with `package.json` changes
+- Never commit `node_modules/`, `.env`, or generated files (`apps/web/.next/`, `dist/`)
