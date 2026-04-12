@@ -26,8 +26,10 @@ CentrAI-Chat is an open-source, centralized AI conversation platform. **End user
 
 - Responsive chat UI (desktop + mobile)
 - Conversation list with search & filters
-- Streaming responses with Markdown rendering
+- Streaming responses with Markdown rendering and syntax highlighting
 - Agent / model picker (published agents + enabled models)
+- **Conversation branching** — fork from any assistant message, cycle through alternative continuations
+- **Thinking & tool-call transparency** — reasoning blocks and tool call/result steps are persisted and displayed
 - Conversation export (JSON, Markdown)
 - Dark / light theme
 
@@ -57,8 +59,10 @@ CentrAI-Chat is an open-source, centralized AI conversation platform. **End user
 | Tool builder | Agents |
 | Workspace / multi-tenancy | Auth + Admin |
 | Billing & usage quotas | Providers + Admin |
-| **Multimodal chat** (images / files in the composer) | Chat UI + message schema + provider vision/document APIs |
-| **Web search in chat** (tool or provider-backed) | Agents + tool execution + optional user toggle |
+| **Multimodal chat** — images / files in the composer | Chat UI + message schema + provider vision APIs |
+| **Web search in chat** — tool or provider-backed | Agents + tool execution |
 | **Voice input** | Chat UI + STT integration |
 
-Composer toolbar items (attach, globe, voice, “Auto”, etc.) are **placeholders** until the rows above ship. Authoritative notes for docs and implementation live in the repo: `docs/FEATURES-CHAT-COMPOSER.md`.
+<Callout type="info">
+Composer toolbar items (attach, globe, voice, "Auto") are **placeholders** in the current UI and will remain non-functional until the corresponding v2 features ship. Authoritative notes live in `docs/FEATURES-CHAT-COMPOSER.md`.
+</Callout>

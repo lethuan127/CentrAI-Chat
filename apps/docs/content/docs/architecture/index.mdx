@@ -13,6 +13,12 @@ description: Technical architecture, module design, and data flows
            │ HTTP/REST        │ SSE (streaming)       │ HTTP/REST
            ▼                  ▼                       ▼
 ┌─────────────────────────────────────────────────────────────────────┐
+│                  API Gateway / Reverse Proxy                        │
+│               (Nginx / Traefik — rate limit, TLS)                  │
+└──────────┬──────────────────┬───────────────────────┬───────────────┘
+           │                  │                       │
+           ▼                  ▼                       ▼
+┌─────────────────────────────────────────────────────────────────────┐
 │                        NestJS Backend                               │
 │                                                                     │
 │  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌─────────┐ │
@@ -23,13 +29,22 @@ description: Technical architecture, module design, and data flows
 │  ┌────┴─────────────┴─────────────┴─────────────┴────────────┴───┐ │
 │  │              Message Router / Orchestrator                     │ │
 │  └───────────────────────────┬───────────────────────────────────┘ │
+│                              │                                     │
+│  ┌───────────────────────────┴───────────────────────────────────┐ │
+│  │   Workspace & Team Management (v2 — schema-ready in v1)       │ │
+│  └───────────────────────────┬───────────────────────────────────┘ │
+│                              │                                     │
+│  ┌───────────────────────────┴───────────────────────────────────┐ │
+│  │                   Audit / Logging Module                       │ │
+│  └───────────────────────────────────────────────────────────────┘ │
 └─────┬──────────────┬──────────────┬──────────────┬──────────────────┘
       │              │              │              │
       ▼              ▼              ▼              ▼
 ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────────────┐
 │ Postgres │  │  Redis   │  │  Object  │  │  LLM Providers      │
-│          │  │ (cache,  │  │  Storage │  │  OpenAI · Anthropic  │
-│          │  │  queue)  │  │ (S3/Min) │  │  Gemini · Ollama     │
+│ (primary │  │ (cache,  │  │  Storage │  │  OpenAI · Anthropic  │
+│ +pgvect) │  │  queue,  │  │(S3/MinIO)│  │  Gemini · Ollama     │
+│          │  │  pubsub) │  │          │  │  (OpenAI-compat API) │
 └──────────┘  └──────────┘  └──────────┘  └─────────────────────┘
 ```
 
@@ -39,32 +54,46 @@ description: Technical architecture, module design, and data flows
 |-------|-----------|-----------|
 | **Frontend** | Next.js 15 (App Router) | Full-stack React; SSR for SEO, client components for chat UI |
 | **Backend** | NestJS 11 (TypeScript) | Modular, decorator-driven framework with built-in DI, guards, SSE streaming |
-| **Database** | PostgreSQL + Prisma 7 | Type-safe schema, migrations, query building |
-| **Realtime** | SSE over HTTP | Streaming LLM responses token-by-token; works through all proxies |
-| **Queue** | Redis + BullMQ | Background jobs: title generation, audit writes |
+| **Database** | PostgreSQL + pgvector + Prisma 7 | Type-safe schema, migrations; pgvector enables future RAG without a separate vector DB |
+| **Object Storage** | S3-compatible (MinIO / AWS S3) | File attachments, document uploads, export artifacts |
+| **Realtime** | SSE over HTTP | Streaming LLM responses token-by-token; works through all proxies and load balancers |
+| **Queue** | Redis + BullMQ | Background jobs: title generation, audit writes, embedding (v2) |
+| **Cache / Pub-Sub** | Redis | Session cache, rate-limit counters, streaming pub/sub |
 | **Auth** | JWT + Passport.js | Local + OAuth (Google, GitHub); pluggable strategies |
-| **Deployment** | Docker Compose | One-command deployment for dev and small teams |
+| **Deployment** | Docker Compose → Kubernetes (v2) | Compose for fast local dev and small teams; K8s for production scale |
 
 ## Main Modules
 
 ### Chat Service
 
-Owns conversations and messages. Streams assistant responses via SSE.
+Owns the lifecycle of conversations and messages. Streams assistant responses via SSE.
 
 - Create, list, archive, delete conversations
-- Append user/assistant messages
-- Stream responses via the AI SDK protocol
-- Persist token usage metadata
-- Emit events for audit logging
+- Append messages tagged by role (`USER`, `ASSISTANT`, `SYSTEM`, `TOOL`) and content type (`TEXT`, `THINKING`, `TOOL_CALL`, `TOOL_RESULT`)
+- Stream responses token-by-token via `text/event-stream`
+- Manage conversation branching (fork from any message; multiple branches at the same point)
+- Persist token usage metadata per message
+- Emit events for audit logging and analytics
 
 ### Agent Service
 
-Manages agent definitions and lifecycle. Admin/developer only.
+Manages agent definitions and lifecycle. Admin/developer-only — end users only see published agents in the chat picker.
 
-- CRUD for agent definitions (prompt, model, tools, tags)
-- Version management (immutable snapshots)
-- Publish workflow: `draft` → `published` → `archived`
-- Only published agents visible to end users
+- CRUD for agent definitions (system prompt, model, params, tools, tags)
+- Version management: every update creates an immutable snapshot; rollback supported
+- Publish workflow: `draft` → `published` → `archived`; only published agents are visible to end users
+- Agent testing playground (ephemeral conversations for admin/developer)
+
+### Message Router
+
+The central orchestrator that decides how to handle an incoming user message.
+
+- Determine routing target: direct LLM call, agent, or multi-agent pipeline (v2)
+- Build the full prompt context (system prompt, conversation history, injected knowledge)
+- Apply token budget and truncation strategy
+- Dispatch to Provider Adapter and stream response back to Chat Service
+- Handle tool-call loops: agent sends `tool_call` → execute → feed result → continue
+- Retry and fallback on provider errors
 
 ### Provider Adapter
 
@@ -72,18 +101,37 @@ Normalizes all LLM providers behind a single OpenAI-compatible interface.
 
 - Unified `complete(messages, options)` across providers
 - Streaming via SSE / chunked transfer
-- Encrypted API key storage
+- Encrypted API key storage (AES-256)
 - Health checks and connection testing
 - Model sync from provider APIs
+
+**Adapter hierarchy:**
+```
+ProviderAdapter (abstract)
+  ├── OpenAIAdapter          — GPT-4o, GPT-4, GPT-3.5, o1, o3
+  ├── AnthropicAdapter       — Claude 4, Claude 3.5
+  ├── GoogleGeminiAdapter    — Gemini Pro, Flash, Ultra
+  ├── OllamaAdapter          — Local models (Llama, Mistral, Phi)
+  └── CustomOpenAIAdapter    — Any OpenAI-compatible endpoint (vLLM, LiteLLM)
+```
 
 ### Admin Module
 
 Dashboard for system administration.
 
 - User management (list, role assignment, deactivation)
-- Analytics (conversations, messages, token usage)
-- Audit log (who did what, when)
+- Analytics (conversations, messages, token usage by period)
+- Audit log (actor, action, resource, timestamp)
 - System settings (default model, rate limits, feature flags)
+- Provider health and quota monitoring
+
+### Workspace & Team Management *(v2 — schema-ready in v1)*
+
+All entities carry a `workspaceId` FK from day one. A single implicit default workspace is auto-created on first boot. Multi-tenancy in v2 requires no data migration — only the Workspace CRUD UI and invitation flow.
+
+### Audit / Logging Module
+
+An interceptor-based module that emits structured audit events on key actions (login, agent CRUD, provider changes, user management) asynchronously via the BullMQ queue.
 
 ## Data Flow — Sending a Chat Message
 
@@ -100,17 +148,31 @@ User types message in Next.js UI
     → Persists user message in Postgres
         │
         ▼
-[3] Provider Service resolves model config
-    → Builds prompt context (system prompt + history)
+[3] Message Router resolves agent config (if agent conversation)
+    → Router builds prompt context (system prompt + history + knowledge)
+    → Router applies token budget / truncation
         │
         ▼
-[4] AI SDK streamText() calls LLM provider
-    → Tokens stream back via SSE
+[4] Message Router calls Provider Adapter
+    → Adapter translates to provider-specific API format
+    → Adapter opens streaming connection to LLM provider
         │
         ▼
-[5] On stream completion:
-    → Persists assistant message + token usage
-    → Generates conversation title (async, via worker)
+[5] Tokens stream back:
+    Provider → Adapter → Router → Chat Service → SSE → UI
+    (each token pushed through the pipeline in real time via text/event-stream)
+        │
+        ▼
+[6] On stream completion:
+    → Chat Service persists full assistant message (role: ASSISTANT, contentType: TEXT)
+    → Chat Service persists reasoning blocks (contentType: THINKING) as child rows
+    → Chat Service persists tool calls / results (contentType: TOOL_CALL / TOOL_RESULT)
+    → Chat Service records token usage
+    → Emits audit event + analytics event (async via queue)
+        │
+        ▼
+[7] If assistant response contains tool_calls (agent mode):
+    → Router executes tool → feeds result back → goto [4]
 ```
 
 ## Project Structure
@@ -119,28 +181,59 @@ User types message in Next.js UI
 centrai-chat/
 ├── apps/
 │   ├── web/          # Next.js frontend (port 3000)
+│   │   ├── app/
+│   │   │   ├── (auth)/        # Login, register, password reset
+│   │   │   ├── (dashboard)/   # End-user shell: chat/, settings/
+│   │   │   └── (admin)/       # Admin shell: agents/, providers/, users/, analytics/, audit/, settings/
+│   │   ├── components/        # chat/, admin/, layout/, ui/
+│   │   └── hooks/             # useChat, useAuth
 │   ├── api/          # NestJS backend (port 4000)
+│   │   └── src/
+│   │       ├── auth/          # Guards, strategies, JWT
+│   │       ├── chat/          # Service, controller, SSE streaming
+│   │       ├── agent/         # Service, controller
+│   │       ├── provider/      # Adapter module
+│   │       ├── router/        # Message router / orchestrator
+│   │       ├── workspace/     # v2 — single default in v1
+│   │       ├── admin/         # Analytics, user management
+│   │       └── audit/         # Audit logging module
 │   ├── worker/       # BullMQ job processor
-│   └── docs/         # This documentation site
+│   └── docs/         # This documentation site (port 3100)
 ├── packages/
-│   ├── types/        # Shared TypeScript types + Zod schemas
-│   ├── sdk/          # TypeScript SDK for the API
-│   └── config/       # Shared tsconfig, prettier presets
-├── docs/             # Source documentation (Markdown)
-├── examples/         # Usage examples
-├── docker/           # Docker Compose files
-└── scripts/          # Dev & ops scripts
+│   ├── types/        # Shared TypeScript types & Zod schemas (@centrai/types)
+│   ├── sdk/          # TypeScript SDK (@centrai/sdk)
+│   ├── ui/           # Design system (@centrai/ui)
+│   └── config/       # Shared ESLint, tsconfig, Prettier presets
+├── docs/             # Design documents (ARCHITECTURE.md, SCOPE.md, MVP.md, …)
+└── examples/         # Quickstart scripts (sdk-basic/, docker-selfhost/, …)
 ```
 
-## RBAC Roles
+## Deployment Topology
 
-| Permission | Admin | Developer | User |
-|------------|-------|-----------|------|
-| Manage users & roles | ✓ | — | — |
-| Manage providers | ✓ | — | — |
-| Create/edit/publish agents | ✓ | ✓ | — |
-| View admin dashboard | ✓ | ✓ (agents only) | — |
-| System settings | ✓ | — | — |
-| Chat with published agents | ✓ | ✓ | ✓ |
-| Chat with enabled models | ✓ | ✓ | ✓ |
-| Manage own conversations | ✓ | ✓ | ✓ |
+### v1 — Docker Compose
+
+Single-host deployment for development and small teams.
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `web` | 3000 | Next.js frontend |
+| `api` | 4000 | NestJS API + SSE |
+| `worker` | — | BullMQ consumer (no exposed port) |
+| `postgres` | 5432 | Persistent volume |
+| `redis` | 6379 | Queue + cache + pub/sub |
+| `minio` | 9000 / 9001 | Object storage + console |
+
+### v2 — Kubernetes
+
+Horizontal scaling, zero-downtime deploys, auto-scaling workers via queue depth HPA.
+
+## Key Design Decisions
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| **Monorepo** | Turborepo + pnpm workspaces | Share types, configs, and lint rules between frontend and backend without publishing |
+| **OpenAI-compatible adapter** | All providers normalized to OpenAI chat format | Most providers already offer OpenAI-compatible endpoints; minimises adapter code |
+| **SSE for streaming** | HTTP `text/event-stream` | Same protocol LLM providers use natively; zero extra dependencies; works through all proxies |
+| **Async job processing** | BullMQ on Redis | LLM calls can be long-running; offloading to workers keeps API response times fast and enables retry/DLQ |
+| **Workspace-scoped schema** | All entities carry `workspaceId` FK; v1 uses single default | Multi-tenancy-ready from day one — enabling workspaces in v2 requires no data migration |
+| **Prisma ORM** | Type-safe, declarative schema, migration history | Strong TypeScript integration; schema-as-code makes DB changes reviewable in PRs |

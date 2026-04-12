@@ -1,0 +1,57 @@
+---
+title: Conversation Branching
+description: Fork any conversation from any point and explore alternative continuations
+---
+
+Branching lets you split a conversation into a new path from any specific point in the thread. Everything **before** the branch point is preserved; everything **after** diverges into an independent continuation.
+
+## When to use branching
+
+- **Explore alternatives** — try a different follow-up from the same assistant reply without losing the original
+- **Compare responses** — regenerate from the same prompt with different wording or a different model
+- **Recover from a bad answer** — branch from the last good turn and steer the conversation in a new direction
+
+## Key concepts
+
+| Term | Meaning |
+|------|---------|
+| **Branch point** | The specific message (usually an assistant message) from which a new continuation is created |
+| **Branch / version** | One of several alternative continuations that share the same history up to the branch point |
+| **Active path** | The branch currently visible in the UI; switching branches changes what's shown below the fork |
+
+The mental model is similar to **Git branches**: one shared history up to a commit, then divergent lines you can switch between.
+
+## Creating a branch
+
+1. Locate the **assistant message** you want to branch from.
+2. Find the **response header** — the row that shows the model name and message metadata.
+3. Click the **branch icon** (a branch-with-plus symbol) in that header.
+
+A new continuation is created from that point. You can then send your next message on the new path.
+
+## Cycling through branches
+
+When more than one branch exists at the same point, branch navigation controls appear in the response header:
+
+- **← / →** (or prev/next) to cycle through alternative continuations at that position
+- An indicator such as **2 of 3** shows which branch is currently active
+
+<Callout type="info">
+Switching branches does not delete other branches — all versions remain and you can always cycle back.
+</Callout>
+
+## Permissions
+
+Branches follow the same access rules as the parent conversation:
+
+- Only the **conversation owner** can create and view branches
+- **Admins** do not gain extra visibility into user branches beyond existing admin policies
+
+## Persistence
+
+Each branch is stored as a linked chain of messages. The chat API models this with a `parentMessageId` reference so multiple child messages can share the same predecessor — each chain represents one branch. Existing conversations and exports are not affected.
+
+## Related
+
+- [Architecture — Chat Service](/docs/architecture#chat-service) — technical details on how branching is stored
+- [Scope & Roadmap](/docs/roadmap) — branching is a v1.2 Chat UI feature
