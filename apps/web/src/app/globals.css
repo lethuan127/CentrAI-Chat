@@ -18,6 +18,8 @@
   --color-accent-foreground: #171717;
   --color-card: #ffffff;
   --color-card-foreground: #0a0a0a;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0a0a0a;
   --color-ring: #2563eb;
 
   --radius-sm: 0.5rem;
@@ -43,6 +45,8 @@
     --color-accent-foreground: #fafafa;
     --color-card: #141414;
     --color-card-foreground: #ededed;
+    --color-popover: #1c1c1c;
+    --color-popover-foreground: #ededed;
     --color-ring: #3b82f6;
   }
 }

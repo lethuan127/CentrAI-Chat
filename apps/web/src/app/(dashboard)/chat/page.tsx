@@ -628,8 +628,8 @@ function ConversationSidebar({
 interface PickerSelection {
   type: 'default' | 'agent' | 'model';
   agentId?: string;
+  /** Full model ref from the API, e.g. openai/gpt-4o-mini */
   modelId?: string;
-  providerId?: string;
   label: string;
 }
 
@@ -733,21 +733,20 @@ function AgentModelPicker({
                   Models
                 </p>
                 {modelGroups.map((group) => (
-                  <div key={group.providerId}>
+                  <div key={group.backendKey}>
                     <div className="flex items-center gap-1.5 px-3 py-1">
                       <Server className="h-3 w-3 text-muted-foreground" />
                       <span className="text-[10px] font-medium text-muted-foreground">
-                        {group.providerName}
+                        {group.backendName}
                       </span>
                     </div>
                     {group.models.map((model) => (
                       <button
-                        key={`${group.providerId}-${model.id}`}
+                        key={`${group.backendKey}-${model.id}`}
                         onClick={() => {
                           onSelect({
                             type: 'model',
                             modelId: model.id,
-                            providerId: group.providerId,
                             label: model.name,
                           });
                           setIsOpen(false);
@@ -756,7 +755,6 @@ function AgentModelPicker({
                           'flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 pl-7 text-sm transition-colors hover:bg-accent',
                           selection.type === 'model' &&
                             selection.modelId === model.id &&
-                            selection.providerId === group.providerId &&
                             'bg-accent',
                         )}
                       >
@@ -880,7 +878,6 @@ export default function ChatPage() {
   } = useChat({
     agentId: selection.type === 'agent' ? selection.agentId : undefined,
     modelId: selection.type === 'model' ? selection.modelId : undefined,
-    providerId: selection.type === 'model' ? selection.providerId : undefined,
     conversationId: activeConversationId ?? undefined,
     onConversationCreated: handleConversationCreated,
   });

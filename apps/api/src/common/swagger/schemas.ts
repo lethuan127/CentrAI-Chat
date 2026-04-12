@@ -11,10 +11,6 @@ import {
   createAgentSchema,
   updateAgentSchema,
   agentQuerySchema,
-  createProviderSchema,
-  updateProviderSchema,
-  providerQuerySchema,
-  updateProviderModelSchema,
   adminUserQuerySchema,
   adminUpdateUserSchema,
   analyticsRangeSchema,
@@ -26,8 +22,6 @@ import {
   agentSchema,
   publishedAgentSchema,
   agentVersionSchema,
-  providerSchema,
-  providerModelSchema,
   conversationSchema,
   messageSchema,
   auditLogSchema,
@@ -50,11 +44,6 @@ export const CreateAgentBody = zodToOpenApi(createAgentSchema);
 export const UpdateAgentBody = zodToOpenApi(updateAgentSchema);
 export const AgentQuery = zodToOpenApi(agentQuerySchema);
 
-export const CreateProviderBody = zodToOpenApi(createProviderSchema);
-export const UpdateProviderBody = zodToOpenApi(updateProviderSchema);
-export const ProviderQuery = zodToOpenApi(providerQuerySchema);
-export const UpdateProviderModelBody = zodToOpenApi(updateProviderModelSchema);
-
 export const AdminUserQuery = zodToOpenApi(adminUserQuerySchema);
 export const AdminUpdateUserBody = zodToOpenApi(adminUpdateUserSchema);
 export const AnalyticsRangeQuery = zodToOpenApi(analyticsRangeSchema);
@@ -67,8 +56,6 @@ export const UserModel = zodToOpenApi(userSchema);
 export const AgentModel = zodToOpenApi(agentSchema);
 export const PublishedAgentModel = zodToOpenApi(publishedAgentSchema);
 export const AgentVersionModel = zodToOpenApi(agentVersionSchema);
-export const ProviderModelSchema = zodToOpenApi(providerSchema);
-export const ProviderModelModelSchema = zodToOpenApi(providerModelSchema);
 export const ConversationModel = zodToOpenApi(conversationSchema);
 export const MessageModel = zodToOpenApi(messageSchema);
 export const AuditLogModel = zodToOpenApi(auditLogSchema);
@@ -116,8 +103,7 @@ export const AnalyticsOverviewSchema: SchemaObject = {
     todayTokens: { type: 'number' },
     totalAgents: { type: 'number' },
     publishedAgents: { type: 'number' },
-    totalProviders: { type: 'number' },
-    enabledProviders: { type: 'number' },
+    configuredLlmBackends: { type: 'number' },
   },
 };
 
@@ -144,18 +130,16 @@ export const SystemSettingsSchema: SchemaObject = {
   },
 };
 
-export const ProviderHealthSchema: SchemaObject = {
+export const LlmBackendHealthSchema: SchemaObject = {
   type: 'object',
   properties: {
-    providerId: { type: 'string', format: 'uuid' },
-    providerName: { type: 'string' },
-    providerType: { type: 'string' },
-    isEnabled: { type: 'boolean' },
+    backendKey: { type: 'string' },
+    displayName: { type: 'string' },
+    isConfigured: { type: 'boolean' },
     status: { type: 'string', enum: ['healthy', 'degraded', 'down', 'unknown'] },
     latencyMs: { type: 'number', nullable: true },
     lastChecked: { type: 'string', nullable: true },
-    enabledModels: { type: 'number' },
-    totalModels: { type: 'number' },
+    catalogModels: { type: 'number' },
     errorMessage: { type: 'string' },
   },
 };
@@ -179,17 +163,12 @@ export const componentSchemas: Record<string, SchemaObject> = {
   Agent: AgentModel,
   PublishedAgent: PublishedAgentModel,
   AgentVersion: AgentVersionModel,
-  CreateProviderRequest: CreateProviderBody,
-  UpdateProviderRequest: UpdateProviderBody,
-  UpdateProviderModelRequest: UpdateProviderModelBody,
-  Provider: ProviderModelSchema,
-  ProviderModel: ProviderModelModelSchema,
   AdminUpdateUserRequest: AdminUpdateUserBody,
   UpdateSystemSettingsRequest: UpdateSystemSettingsBody,
   AnalyticsOverview: AnalyticsOverviewSchema,
   UsageTrendPoint: UsageTrendPointSchema,
   SystemSettings: SystemSettingsSchema,
-  ProviderHealth: ProviderHealthSchema,
+  LlmBackendHealth: LlmBackendHealthSchema,
   AuditLog: AuditLogModel,
   PaginationMeta: PaginationMeta,
 };

@@ -1,18 +1,19 @@
-import type { ChatMessage } from './message.js';
-import type { SessionState } from './session-state.js';
-import type { RuntimeTool } from './tool-spec.js';
+import { z } from 'zod';
 
-export interface RuntimeAgentDefinition {
-  name?: string;
-  description?: string | null;
-  role: string;
-  instructions: string;
-  expectedOutput?: string | null;
-  tools: RuntimeTool[];
-  /** Default session snapshot; request-scoped state can override in `mergeRunContext`. */
-  sessionState: SessionState | null;
-  addSessionStateToContext: boolean;
-  messageHistory: ChatMessage[];
-  maxTurnsMessageHistory: number | null;
-  metadata: Record<string, unknown>;
-}
+import { agentToolRefSchema } from './agent-tool-ref.js';
+
+export const runtimeAgentDefinitionSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().nullable(),
+  role: z.string(),
+  instructions: z.string(),
+  expectedOutput: z.string().nullable(),
+  toolRefs: z.array(agentToolRefSchema),
+  addSessionStateToContext: z.boolean(),
+  maxTurnsMessageHistory: z.number().int().positive().nullable(),
+  modelId: z.string().nullable().optional(),
+  modelProvider: z.string().nullable().optional(),
+  sessionState: z.record(z.unknown()).nullable().default(null),
+});
+
+export type RuntimeAgentDefinition = z.infer<typeof runtimeAgentDefinitionSchema>;

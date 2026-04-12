@@ -20,7 +20,6 @@ export interface BranchGraphMessage {
 interface UseChatOptions {
   agentId?: string;
   modelId?: string;
-  providerId?: string;
   conversationId?: string;
   onConversationCreated?: (conversationId: string) => void;
   /**
@@ -154,7 +153,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             conversationId: conversationIdRef.current ?? undefined,
             agentId: optionsRef.current.agentId ?? undefined,
             modelId: optionsRef.current.modelId ?? undefined,
-            providerId: optionsRef.current.providerId ?? undefined,
             branchFromAssistantMessageId: branchFromAssistantRef.current ?? undefined,
             timeZone:
               optionsRef.current.getClientTimeZone?.() ?? browserDefaultTimeZone(),

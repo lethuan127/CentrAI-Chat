@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma';
-import { ProviderAdminService } from '../provider/provider-admin.service';
+import { LlmService } from '../llm/llm.service';
 import type {
   AdminUserQueryDto,
   AdminUpdateUserDto,
@@ -10,7 +10,7 @@ import type {
   AuditLogQueryDto,
   SystemSettings,
   UpdateSystemSettingsDto,
-  ProviderHealth,
+  LlmBackendHealth,
 } from '@centrai/types';
 import type { Role } from '../generated/prisma/enums.js';
 
@@ -31,7 +31,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly providerAdmin: ProviderAdminService,
+    private readonly llmService: LlmService,
   ) {}
 
   // ─── User Management ──────────────────────────────────────
@@ -135,8 +135,6 @@ export class AdminService {
       todayTokenAgg,
       totalAgents,
       publishedAgents,
-      totalProviders,
-      enabledProviders,
     ] = await Promise.all([
       this.prisma.user.count({ where: { workspaceId, deletedAt: null } }),
       this.prisma.user.count({ where: { workspaceId, isActive: true, deletedAt: null } }),
@@ -166,8 +164,6 @@ export class AdminService {
       }),
       this.prisma.agent.count({ where: { workspaceId, deletedAt: null } }),
       this.prisma.agent.count({ where: { workspaceId, deletedAt: null, status: 'PUBLISHED' } }),
-      this.prisma.provider.count({ where: { workspaceId } }),
-      this.prisma.provider.count({ where: { workspaceId, isEnabled: true } }),
     ]);
 
     return {
@@ -181,8 +177,7 @@ export class AdminService {
       todayTokens: todayTokenAgg._sum.tokenCount ?? 0,
       totalAgents,
       publishedAgents,
-      totalProviders,
-      enabledProviders,
+      configuredLlmBackends: this.llmService.countConfiguredBackends(),
     };
   }
 
@@ -336,51 +331,7 @@ export class AdminService {
 
   // ─── Provider Health ──────────────────────────────────────
 
-  async getProviderHealth(workspaceId: string): Promise<ProviderHealth[]> {
-    const providers = await this.prisma.provider.findMany({
-      where: { workspaceId },
-      include: {
-        models: true,
-        _count: { select: { models: { where: { isEnabled: true } } } },
-      },
-      orderBy: { name: 'asc' },
-    });
-
-    const results: ProviderHealth[] = [];
-
-    for (const provider of providers) {
-      let status: ProviderHealth['status'] = 'unknown';
-      let latencyMs: number | null = null;
-      let errorMessage: string | undefined;
-
-      if (provider.isEnabled) {
-        const start = Date.now();
-        try {
-          const result = await this.providerAdmin.testConnection(provider.id);
-          latencyMs = Date.now() - start;
-          status = result.ok ? 'healthy' : 'down';
-          if (!result.ok) errorMessage = result.message;
-        } catch (err) {
-          latencyMs = Date.now() - start;
-          status = 'down';
-          errorMessage = err instanceof Error ? err.message : 'Connection failed';
-        }
-      }
-
-      results.push({
-        providerId: provider.id,
-        providerName: provider.name,
-        providerType: provider.type,
-        isEnabled: provider.isEnabled,
-        status,
-        latencyMs,
-        lastChecked: new Date().toISOString(),
-        enabledModels: provider._count.models,
-        totalModels: provider.models.length,
-        errorMessage,
-      });
-    }
-
-    return results;
+  async getLlmBackendHealth(_workspaceId: string): Promise<LlmBackendHealth[]> {
+    return this.llmService.getBackendHealthList();
   }
 }

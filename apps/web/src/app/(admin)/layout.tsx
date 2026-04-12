@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 const adminNav = [
   { href: '/admin', label: 'Overview', icon: BarChart3, exact: true },
   { href: '/admin/agents', label: 'Agents', icon: Bot },
-  { href: '/admin/providers', label: 'Providers', icon: Server },
+  { href: '/admin/providers', label: 'LLM (env)', icon: Server },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/audit', label: 'Audit Log', icon: ScrollText },
   { href: '/admin/settings', label: 'Settings', icon: Settings },

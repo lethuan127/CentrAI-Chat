@@ -28,14 +28,6 @@ enum MessageRole {
   SYSTEM
 }
 
-enum ProviderType {
-  openai
-  anthropic
-  google
-  ollama
-  custom
-}
-
 // ─── Workspace (v1: single default, v2: multi-tenant) ──────
 
 model Workspace {
@@ -48,7 +40,6 @@ model Workspace {
   users          User[]
   agents         Agent[]
   conversations  Conversation[]
-  providers      Provider[]
   auditLogs      AuditLog[]
   systemSettings SystemSetting[]
 
@@ -186,7 +177,6 @@ model Conversation {
   agentId     String?
   agent       Agent?    @relation(fields: [agentId], references: [id])
   modelId     String?
-  providerId  String?
   title       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -230,44 +220,6 @@ model Message {
   @@index([createdAt])
   @@index([parentId])
   @@map("messages")
-}
-
-// ─── Provider ────────────────────────────────────────────────
-
-model Provider {
-  id              String       @id @default(uuid())
-  workspaceId     String
-  workspace       Workspace    @relation(fields: [workspaceId], references: [id])
-  name            String
-  type            ProviderType
-  baseUrl         String?
-  apiKeyEncrypted String?      @db.Text
-  isEnabled       Boolean      @default(true)
-  config          Json         @default("{}")
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  models ProviderModel[]
-
-  @@index([workspaceId])
-  @@map("providers")
-}
-
-model ProviderModel {
-  id            String   @id @default(uuid())
-  providerId    String
-  provider      Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  modelId       String
-  name          String
-  contextWindow Int?
-  isEnabled     Boolean  @default(false)
-  capabilities  Json     @default("{}")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([providerId, modelId])
-  @@index([providerId])
-  @@map("provider_models")
 }
 
 // ─── Audit Log ──────────────────────────────────────────────

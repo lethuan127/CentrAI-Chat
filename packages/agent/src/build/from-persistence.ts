@@ -1,28 +1,36 @@
-import type { RuntimeAgentDefinition } from '../domain/agent-definition.js';
-import { parseRuntimeTools } from '../domain/tool-spec.js';
+import { runtimeAgentDefinitionSchema, type RuntimeAgentDefinition } from '../domain/agent-definition.js';
+import { parseAgentToolRefsFromJson } from '../domain/agent-tool-ref.js';
 
-/** Maps a persisted agent row shape (e.g. Prisma) to a {@link RuntimeAgentDefinition}. */
-export function runtimeAgentDefinitionFromPersisted(input: {
+export type PersistedAgentLike = {
   name: string;
-  description?: string | null;
+  description: string | null;
   role: string;
   instructions: string;
-  expectedOutput?: string | null;
-  tools?: unknown;
-  addSessionStateToContext?: boolean;
-  maxTurnsMessageHistory?: number | null;
-}): RuntimeAgentDefinition {
-  return {
-    name: input.name,
-    description: input.description ?? null,
-    role: input.role,
-    instructions: input.instructions,
-    expectedOutput: input.expectedOutput ?? null,
-    tools: parseRuntimeTools(input.tools ?? []),
+  expectedOutput: string | null;
+  tools: unknown;
+  addSessionStateToContext: boolean;
+  maxTurnsMessageHistory: number | null;
+  modelId?: string | null;
+  modelProvider?: string | null;
+};
+
+/**
+ * Maps a DB agent row (or test fixture) into a Zod-validated `RuntimeAgentDefinition`.
+ */
+export function runtimeAgentDefinitionFromPersisted(row: PersistedAgentLike): RuntimeAgentDefinition {
+  const candidate = {
+    name: row.name,
+    description: row.description,
+    role: row.role,
+    instructions: row.instructions,
+    expectedOutput: row.expectedOutput,
+    toolRefs: parseAgentToolRefsFromJson(row.tools),
+    addSessionStateToContext: row.addSessionStateToContext,
+    maxTurnsMessageHistory: row.maxTurnsMessageHistory,
+    modelId: row.modelId ?? null,
+    modelProvider: row.modelProvider ?? null,
     sessionState: null,
-    addSessionStateToContext: input.addSessionStateToContext ?? false,
-    messageHistory: [],
-    maxTurnsMessageHistory: input.maxTurnsMessageHistory ?? null,
-    metadata: {},
   };
+
+  return runtimeAgentDefinitionSchema.parse(candidate);
 }

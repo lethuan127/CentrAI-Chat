@@ -5,6 +5,7 @@ import type {
   CreateConversationDto,
   ConversationQueryDto,
   MessageQueryDto,
+  EnabledLlmModelGroup,
 } from '@centrai/types';
 
 interface Envelope<T> { data: T; error: null; meta?: Record<string, unknown> }
@@ -14,7 +15,7 @@ export interface SendMessageOptions {
   conversationId?: string;
   agentId?: string;
   modelId?: string;
-  providerId?: string;
+  modelProvider?: string;
 }
 
 export class ChatResource {
@@ -71,5 +72,10 @@ export class ChatResource {
    */
   async sendMessageStream(opts: SendMessageOptions): Promise<ReadableStream<Uint8Array>> {
     return this.client.stream('/chat/messages', opts);
+  }
+
+  async getEnabledModels(): Promise<EnabledLlmModelGroup[]> {
+    const res = await this.client.request<Envelope<EnabledLlmModelGroup[]>>('GET', '/chat/enabled-models');
+    return res.data;
   }
 }

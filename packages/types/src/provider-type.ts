@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** LLM provider discriminator: stored in DB as `ProviderType` and used in API JSON. */
+/** LLM backend discriminator (e.g. agent `modelProvider` and API hints). */
 export const providerTypeKeySchema = z.enum(['openai', 'anthropic', 'google', 'ollama', 'custom']);
 
 export type ProviderTypeKey = z.infer<typeof providerTypeKeySchema>;

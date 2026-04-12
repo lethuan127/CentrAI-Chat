@@ -23,7 +23,10 @@ export async function processGenerateTitle(
 
   if (conversation?.title) return;
 
-  const model = conversation?.modelId ?? process.env.DEFAULT_MODEL ?? 'gpt-4o-mini';
+  let model = conversation?.modelId ?? process.env.DEFAULT_MODEL ?? 'gpt-4o-mini';
+  if (model.includes('/')) {
+    model = model.split('/').slice(1).join('/');
+  }
   const baseUrl = process.env.PROVIDER_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1';
   const apiKey = process.env.PROVIDER_API_KEY ?? process.env.OPENAI_API_KEY;
 

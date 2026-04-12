@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { normalizeProviderTypeInput, providerTypeKeySchema } from './provider-type';
 import type { Role } from './models';
 
 // ─── Auth DTOs ──────────────────────────────────────────────
@@ -55,7 +54,8 @@ export const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message cannot be empty').max(100_000),
   agentId: z.string().uuid().optional(),
   modelId: z.string().optional(),
-  providerId: z.string().optional(),
+  /** When `modelId` is a short id (e.g. `gpt-4o`), backend key: `openai`, `anthropic`, … */
+  modelProvider: z.string().max(64).optional(),
 });
 
 export type SendMessageDto = z.infer<typeof sendMessageSchema>;
@@ -65,7 +65,7 @@ export type SendMessageDto = z.infer<typeof sendMessageSchema>;
 export const createConversationSchema = z.object({
   agentId: z.string().uuid().optional(),
   modelId: z.string().optional(),
-  providerId: z.string().optional(),
+  modelProvider: z.string().max(64).optional(),
   title: z.string().max(200).optional(),
 });
 
@@ -169,59 +169,6 @@ export const agentQuerySchema = z.object({
 
 export type AgentQueryDto = z.infer<typeof agentQuerySchema>;
 
-// ─── Provider DTOs ───────────────────────────────────────────
-
-const createProviderFields = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  type: providerTypeKeySchema,
-  baseUrl: z.string().url().optional().nullable(),
-  apiKey: z.string().optional().nullable(),
-  isEnabled: z.boolean().default(true),
-  config: z.record(z.unknown()).optional().default({}),
-});
-
-/** Accepts optional `displayName` as alias for `name` (UI label / legacy clients). Normalizes `type` casing. */
-export const createProviderSchema = z.preprocess((raw) => {
-  if (raw && typeof raw === 'object' && raw !== null) {
-    const o = raw as Record<string, unknown>;
-    const next = { ...o };
-    if (next.name == null && typeof next.displayName === 'string') {
-      next.name = next.displayName;
-    }
-    if (typeof next.type === 'string') {
-      next.type = normalizeProviderTypeInput(next.type);
-    }
-    return next;
-  }
-  return raw;
-}, createProviderFields);
-
-export type CreateProviderDto = z.infer<typeof createProviderSchema>;
-
-export const updateProviderSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  baseUrl: z.string().url().optional().nullable(),
-  apiKey: z.string().optional().nullable(),
-  isEnabled: z.boolean().optional(),
-  config: z.record(z.unknown()).optional(),
-});
-
-export type UpdateProviderDto = z.infer<typeof updateProviderSchema>;
-
-export const providerQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
-  type: z.preprocess(normalizeProviderTypeInput, providerTypeKeySchema.optional()),
-});
-
-export type ProviderQueryDto = z.infer<typeof providerQuerySchema>;
-
-export const updateProviderModelSchema = z.object({
-  isEnabled: z.boolean(),
-});
-
-export type UpdateProviderModelDto = z.infer<typeof updateProviderModelSchema>;
-
 // ─── Admin: User Management DTOs ─────────────────────────────
 
 export const adminUserQuerySchema = z.object({
@@ -263,8 +210,8 @@ export interface AnalyticsOverview {
   todayTokens: number;
   totalAgents: number;
   publishedAgents: number;
-  totalProviders: number;
-  enabledProviders: number;
+  /** Number of LLM backends that have API credentials set in the API process environment. */
+  configuredLlmBackends: number;
 }
 
 export interface UsageTrendPoint {
@@ -313,19 +260,30 @@ export interface SystemSettings {
   maintenanceMode: boolean;
 }
 
-// ─── Admin: Provider Health ─────────────────────────────────
+// ─── Admin: LLM backend health (env credentials + connectivity) ─────────────────
 
-export interface ProviderHealth {
-  providerId: string;
-  providerName: string;
-  providerType: string;
-  isEnabled: boolean;
+export interface LlmBackendHealth {
+  backendKey: string;
+  displayName: string;
+  isConfigured: boolean;
   status: 'healthy' | 'degraded' | 'down' | 'unknown';
   latencyMs: number | null;
   lastChecked: string | null;
-  enabledModels: number;
-  totalModels: number;
+  catalogModels: number;
   errorMessage?: string;
+}
+
+/** Models available for chat when the corresponding env credentials are set on the API. */
+export interface EnabledLlmModelGroup {
+  backendKey: string;
+  backendName: string;
+  backendType: string;
+  models: Array<{
+    id: string;
+    name: string;
+    contextWindow: number | null;
+    capabilities: Record<string, boolean>;
+  }>;
 }
 
 // ─── Auth Responses ─────────────────────────────────────────

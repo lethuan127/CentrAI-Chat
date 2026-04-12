@@ -8,7 +8,7 @@ import type {
   AnalyticsOverview,
   UsageTrendPoint,
   SystemSettings,
-  ProviderHealth,
+  LlmBackendHealth,
   AuditLogQueryDto,
 } from '@centrai/types';
 
@@ -60,10 +60,10 @@ export class AdminResource {
     return res.data;
   }
 
-  // ─── Provider Health ───────────────────────────────────────
+  // ─── LLM backend health (env) ──────────────────────────────
 
-  async getProviderHealth(): Promise<ProviderHealth[]> {
-    const res = await this.client.request<Envelope<ProviderHealth[]>>('GET', '/admin/providers/health');
+  async getLlmBackendHealth(): Promise<LlmBackendHealth[]> {
+    const res = await this.client.request<Envelope<LlmBackendHealth[]>>('GET', '/admin/llm/health');
     return res.data;
   }
 }

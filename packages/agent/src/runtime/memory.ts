@@ -1,4 +1,6 @@
 import type { ConnectionOptions } from 'node:tls';
+
+import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
 
 export const CENTRAI_MASTRA_PG_STORE_ID = 'centrai-agent-runtime';
@@ -15,9 +17,7 @@ export interface CreateCentrAiPostgresStoreOptions {
 }
 
 /**
- * PostgreSQL storage for Mastra (workflows, traces, debug-oriented message/thread stores).
- * End-user chat display should use application conversation messages, not Mastra tables as the trusted source.
- * @see https://mastra.ai/reference/storage/postgresql
+ * PostgreSQL storage for Mastra (workflows, traces, optional thread/memory backends).
  */
 export function createCentrAiPostgresStore(options: CreateCentrAiPostgresStoreOptions): PostgresStore {
   return new PostgresStore({
@@ -30,6 +30,19 @@ export function createCentrAiPostgresStore(options: CreateCentrAiPostgresStoreOp
       ? { idleTimeoutMillis: options.idleTimeoutMillis }
       : {}),
     ...(options.disableInit !== undefined ? { disableInit: options.disableInit } : {}),
+  });
+}
+
+/** Mastra `Memory` wired to a Postgres store (debug / workflow-style threads; not Prisma transcript). */
+export function createCentrAiMastraMemory(postgresStore: PostgresStore): Memory {
+  return new Memory({
+    storage: postgresStore,
+    vector: false,
+    options: {
+      generateTitle: false,
+      lastMessages: 50,
+      semanticRecall: false,
+    },
   });
 }
 

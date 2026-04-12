@@ -1,6 +1,3 @@
--- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "public";
-
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('ADMIN', 'DEVELOPER', 'USER');
 
@@ -9,9 +6,6 @@ CREATE TYPE "AuthProvider" AS ENUM ('LOCAL', 'GOOGLE', 'GITHUB');
 
 -- CreateEnum
 CREATE TYPE "MessageRole" AS ENUM ('USER', 'ASSISTANT', 'SYSTEM');
-
--- CreateEnum
-CREATE TYPE "ProviderType" AS ENUM ('openai', 'anthropic', 'google', 'ollama', 'custom');
 
 -- CreateEnum
 CREATE TYPE "AgentStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED');
@@ -121,7 +115,6 @@ CREATE TABLE "conversations" (
     "userId" TEXT NOT NULL,
     "agentId" TEXT,
     "modelId" TEXT,
-    "providerId" TEXT,
     "title" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -148,37 +141,6 @@ CREATE TABLE "messages" (
     "parent_id" TEXT,
 
     CONSTRAINT "messages_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "providers" (
-    "id" TEXT NOT NULL,
-    "workspaceId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "type" "ProviderType" NOT NULL,
-    "baseUrl" TEXT,
-    "apiKeyEncrypted" TEXT,
-    "isEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "config" JSONB NOT NULL DEFAULT '{}',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "providers_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "provider_models" (
-    "id" TEXT NOT NULL,
-    "providerId" TEXT NOT NULL,
-    "modelId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "contextWindow" INTEGER,
-    "isEnabled" BOOLEAN NOT NULL DEFAULT false,
-    "capabilities" JSONB NOT NULL DEFAULT '{}',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "provider_models_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -270,15 +232,6 @@ CREATE INDEX "messages_createdAt_idx" ON "messages"("createdAt");
 CREATE INDEX "messages_parent_id_idx" ON "messages"("parent_id");
 
 -- CreateIndex
-CREATE INDEX "providers_workspaceId_idx" ON "providers"("workspaceId");
-
--- CreateIndex
-CREATE INDEX "provider_models_providerId_idx" ON "provider_models"("providerId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "provider_models_providerId_modelId_key" ON "provider_models"("providerId", "modelId");
-
--- CreateIndex
 CREATE INDEX "audit_logs_workspaceId_idx" ON "audit_logs"("workspaceId");
 
 -- CreateIndex
@@ -337,12 +290,6 @@ ALTER TABLE "messages" ADD CONSTRAINT "messages_userId_fkey" FOREIGN KEY ("userI
 
 -- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "messages"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "providers" ADD CONSTRAINT "providers_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "provider_models" ADD CONSTRAINT "provider_models_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "providers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

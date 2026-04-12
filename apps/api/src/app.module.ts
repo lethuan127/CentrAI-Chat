@@ -7,7 +7,6 @@ import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { ChatModule } from './chat/chat.module';
 import { AgentModule } from './agent/agent.module';
-import { ProviderModule } from './provider/provider.module';
 import { AdminModule } from './admin/admin.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -27,7 +26,6 @@ import { AuditInterceptor } from './admin/audit.interceptor';
     PrismaModule,
     AuthModule,
     HealthModule,
-    ProviderModule,
     ChatModule,
     AgentModule,
     AdminModule,

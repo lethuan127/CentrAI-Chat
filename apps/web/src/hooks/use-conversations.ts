@@ -10,7 +10,6 @@ export interface ConversationListItem {
   agentId: string | null;
   agentName: string | null;
   modelId: string | null;
-  providerId: string | null;
   lastMessage: {
     content: string;
     role: string;

@@ -32,7 +32,7 @@ import type {
   UpdateActiveLeafDto,
   EditUserMessageDto,
 } from '@centrai/types';
-import { createCentrAiChatStream } from '@centrai/agent';
+import { createCentrAiChatStream, createMastraAgent, buildSystemPrompt, mergeRunContext } from '@centrai/agent';
 import {
   createUIMessageStream,
   pipeUIMessageStreamToResponse,
@@ -42,7 +42,7 @@ import type { InferUIMessageChunk, UIMessage } from 'ai';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { ChatService } from './chat.service';
-import { ProviderService } from '../provider';
+import { LlmService } from '../llm';
 import {
   CreateConversationBody,
   ConversationModel,
@@ -68,8 +68,16 @@ export class ChatController {
 
   constructor(
     private readonly chatService: ChatService,
-    private readonly providerService: ProviderService,
+    private readonly llmService: LlmService,
   ) {}
+
+  @Get('enabled-models')
+  @ApiOperation({ summary: 'List LLM models available from environment-configured backends' })
+  @ApiResponse({ status: 200, description: 'Models grouped by backend (requires matching API keys in env)' })
+  async getEnabledModels(@CurrentUser() _user: { id: string }) {
+    const models = this.llmService.getEnabledModelGroups();
+    return { data: models, error: null };
+  }
 
   @Post('conversations')
   @HttpCode(HttpStatus.CREATED)
@@ -273,8 +281,8 @@ export class ChatController {
         },
         conversationId: { type: 'string', format: 'uuid', description: 'Existing conversation ID (optional for new)' },
         agentId: { type: 'string', format: 'uuid', description: 'Agent to converse with' },
-        modelId: { type: 'string', description: 'Model identifier (e.g. gpt-4o)' },
-        providerId: { type: 'string', description: 'Provider ID override' },
+        modelId: { type: 'string', description: 'Model id, typically backend/model (e.g. openai/gpt-4o-mini)' },
+        modelProvider: { type: 'string', description: 'When modelId has no slash: backend key (openai, anthropic, …)' },
         trigger: { type: 'string', description: 'AI SDK trigger (e.g. regenerate-message)' },
         branchFromAssistantMessageId: {
           type: 'string',
@@ -301,7 +309,7 @@ export class ChatController {
       conversationId,
       agentId,
       modelId,
-      providerId,
+      modelProvider,
       trigger,
       branchFromAssistantMessageId,
       messageId: messageIdFromBody,
@@ -311,7 +319,7 @@ export class ChatController {
       conversationId?: string;
       agentId?: string;
       modelId?: string;
-      providerId?: string;
+      modelProvider?: string;
       trigger?: string;
       branchFromAssistantMessageId?: string;
       messageId?: string;
@@ -322,7 +330,7 @@ export class ChatController {
     const { conversationId: convId, isNew } = await this.chatService.ensureConversation(
       user.id,
       user.workspaceId,
-      { conversationId, agentId, modelId, providerId },
+      { conversationId, agentId, modelId, modelProvider },
     );
 
     const conv = await this.chatService.findOwnedConversation(convId, user.id);
@@ -399,15 +407,15 @@ export class ChatController {
       assistantPersist = { mode: 'create', parentUserMessageId: userRow.id };
     }
 
-    const { model, system } = await this.providerService.resolveModelAndSystem(
+    const { model, definition } = await this.llmService.resolveModelAndDefinition(
       agentId,
       modelId,
-      providerId,
-      user.workspaceId,
+      modelProvider,
     );
 
     const sessionPreamble = await this.chatService.buildChatSessionPreamble(user.id, clientTimeZone);
-    const instructions = sessionPreamble ? `${sessionPreamble}\n\n${system}` : system;
+    const baseInstructions = buildSystemPrompt(definition);
+    const instructions = mergeRunContext(baseInstructions, sessionPreamble);
 
     const uiMessages: UIMessage[] = (messages ?? []) as UIMessage[];
     const modelMessages = await convertToModelMessages(uiMessages);
@@ -420,10 +428,17 @@ export class ChatController {
     };
     req.on('close', stopModelIfClientDisconnects);
 
+    // Step 1 (architecture §3): build the Mastra Agent (tools + memory wired here when needed).
+    const agent = await createMastraAgent({
+      definition,
+      model,
+      instructionsOverride: instructions,
+    });
+
+    // Step 2 (architecture §3): stream — Agent.stream → toAISdkStream.
     // User-visible transcript: Prisma conversation messages only (not Mastra memory / PG).
     const { mastraOutput, sdkUiStream } = await createCentrAiChatStream({
-      instructions,
-      model,
+      agent,
       messages: modelMessages,
       abortSignal: abortController.signal,
     });

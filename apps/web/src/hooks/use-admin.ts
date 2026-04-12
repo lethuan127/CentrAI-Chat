@@ -7,7 +7,7 @@ import type {
   UsageTrendPoint,
   SystemSettings,
   UpdateSystemSettingsDto,
-  ProviderHealth,
+  LlmBackendHealth,
 } from '@centrai/types';
 
 // ─── Analytics ──────────────────────────────────────────────
@@ -226,10 +226,10 @@ export function useSystemSettings() {
   return { settings, isLoading, error, isSaving, refetch: fetch, updateSettings };
 }
 
-// ─── Provider Health ────────────────────────────────────────
+// ─── LLM backend health ───────────────────────────────────────
 
-export function useProviderHealth() {
-  const [health, setHealth] = useState<ProviderHealth[]>([]);
+export function useLlmBackendHealth() {
+  const [health, setHealth] = useState<LlmBackendHealth[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -237,10 +237,10 @@ export function useProviderHealth() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await apiClient.get<ProviderHealth[]>('/admin/providers/health');
+      const res = await apiClient.get<LlmBackendHealth[]>('/admin/llm/health');
       setHealth(res.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load provider health');
+      setError(err instanceof Error ? err.message : 'Failed to load LLM health');
     } finally {
       setIsLoading(false);
     }

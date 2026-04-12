@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { providerTypeKeySchema, type ProviderTypeKey } from './provider-type';
 
 // ─── User ────────────────────────────────────────────────────
 
@@ -104,46 +103,6 @@ export const publishedAgentSchema = z.object({
 
 export type PublishedAgent = z.infer<typeof publishedAgentSchema>;
 
-// ─── Provider ────────────────────────────────────────────────
-
-export const ProviderType = {
-  openai: 'openai',
-  anthropic: 'anthropic',
-  google: 'google',
-  ollama: 'ollama',
-  custom: 'custom',
-} as const satisfies Record<ProviderTypeKey, ProviderTypeKey>;
-
-export type ProviderType = ProviderTypeKey;
-
-export const providerSchema = z.object({
-  id: z.string().uuid(),
-  workspaceId: z.string().uuid(),
-  name: z.string(),
-  type: providerTypeKeySchema,
-  baseUrl: z.string().nullable(),
-  isEnabled: z.boolean(),
-  config: z.record(z.unknown()).optional(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-});
-
-export type Provider = z.infer<typeof providerSchema>;
-
-export const providerModelSchema = z.object({
-  id: z.string().uuid(),
-  providerId: z.string().uuid(),
-  modelId: z.string(),
-  name: z.string(),
-  contextWindow: z.number().int().nullable(),
-  isEnabled: z.boolean(),
-  capabilities: z.record(z.unknown()).optional(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-});
-
-export type ProviderModel = z.infer<typeof providerModelSchema>;
-
 // ─── Message Role ────────────────────────────────────────────
 
 export const MessageRole = {
@@ -162,7 +121,6 @@ export const conversationSchema = z.object({
   userId: z.string().uuid(),
   agentId: z.string().uuid().nullable(),
   modelId: z.string().nullable(),
-  providerId: z.string().nullable(),
   title: z.string().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

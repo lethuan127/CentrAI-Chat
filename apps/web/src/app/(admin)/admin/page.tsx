@@ -11,7 +11,7 @@ import {
   TrendingUp,
   Activity,
 } from 'lucide-react';
-import { useAnalyticsOverview, useUsageTrend, useProviderHealth } from '@/hooks/use-admin';
+import { useAnalyticsOverview, useUsageTrend, useLlmBackendHealth } from '@/hooks/use-admin';
 import { cn } from '@/lib/utils';
 
 type Range = '1d' | '7d' | '30d' | '90d';
@@ -66,8 +66,8 @@ function MiniChart({ data, dataKey }: { data: { date: string; [key: string]: unk
   );
 }
 
-function ProviderHealthCards() {
-  const { health, isLoading } = useProviderHealth();
+function LlmBackendHealthCards() {
+  const { health, isLoading } = useLlmBackendHealth();
 
   if (isLoading) {
     return (
@@ -82,7 +82,7 @@ function ProviderHealthCards() {
   if (!health.length) {
     return (
       <p className="text-sm text-muted-foreground">
-        No providers configured. Add one in the Providers page.
+        No LLM backend data returned.
       </p>
     );
   }
@@ -91,7 +91,7 @@ function ProviderHealthCards() {
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {health.map((p) => (
         <div
-          key={p.providerId}
+          key={p.backendKey}
           className="flex items-center gap-3 rounded-lg border border-border p-4"
         >
           <div
@@ -104,15 +104,16 @@ function ProviderHealthCards() {
             )}
           />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{p.providerName}</p>
+            <p className="truncate text-sm font-medium">{p.displayName}</p>
             <p className="text-xs text-muted-foreground">
-              {p.providerType} · {p.enabledModels}/{p.totalModels} models
+              {p.backendKey}
+              {p.isConfigured ? ` · ${p.catalogModels} catalog models` : ' · not configured'}
               {p.latencyMs != null && ` · ${p.latencyMs}ms`}
             </p>
           </div>
-          {!p.isEnabled && (
+          {!p.isConfigured && (
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              Disabled
+              No env key
             </span>
           )}
         </div>
@@ -179,9 +180,9 @@ export default function AdminOverviewPage() {
               accent="text-cyan-500"
             />
             <StatCard
-              label="Providers"
-              value={fmt(overview?.totalProviders)}
-              sub={`${fmt(overview?.enabledProviders)} enabled`}
+              label="LLM backends (env)"
+              value={fmt(overview?.configuredLlmBackends)}
+              sub="with API keys set"
               icon={Server}
               accent="text-orange-500"
             />
@@ -246,14 +247,14 @@ export default function AdminOverviewPage() {
         )}
       </div>
 
-      {/* Provider Health */}
+      {/* LLM backend health */}
       <div className="mt-8">
         <div className="flex items-center gap-2">
           <Activity className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Provider Health</h2>
+          <h2 className="text-lg font-semibold">LLM backends</h2>
         </div>
         <div className="mt-4">
-          <ProviderHealthCards />
+          <LlmBackendHealthCards />
         </div>
       </div>
     </div>

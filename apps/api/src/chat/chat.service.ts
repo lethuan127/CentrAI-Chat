@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma';
-import { ProviderService } from '../provider';
+import { LlmService } from '../llm';
 import { MessageRole, AgentStatus } from '../generated/prisma/enums.js';
 import type { ConversationQueryDto } from '@centrai/types';
 import type { Message as MessageRow } from '../generated/prisma/client.js';
@@ -17,7 +17,7 @@ export class ChatService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly providerService: ProviderService,
+    private readonly llmService: LlmService,
   ) {}
 
   // ─── Helpers ────────────────────────────────────────────────
@@ -98,7 +98,7 @@ export class ChatService {
   async createConversation(
     userId: string,
     workspaceId: string,
-    options: { agentId?: string; modelId?: string; providerId?: string; title?: string },
+    options: { agentId?: string; modelId?: string; modelProvider?: string; title?: string },
   ) {
     if (options.agentId) {
       const agent = await this.prisma.agent.findFirst({
@@ -107,13 +107,17 @@ export class ChatService {
       if (!agent) throw new NotFoundException('Published agent not found');
     }
 
+    let modelId = options.modelId ?? null;
+    if (modelId && !modelId.includes('/') && options.modelProvider?.trim()) {
+      modelId = `${options.modelProvider.trim().toLowerCase()}/${modelId}`;
+    }
+
     return this.prisma.conversation.create({
       data: {
         workspaceId,
         userId,
         agentId: options.agentId ?? null,
-        modelId: options.modelId ?? null,
-        providerId: options.providerId ?? null,
+        modelId,
         title: options.title ?? null,
       },
     });
@@ -175,7 +179,6 @@ export class ChatService {
         agentId: c.agentId,
         agentName: c.agent?.name ?? null,
         modelId: c.modelId,
-        providerId: c.providerId,
         lastMessage: c.messages[0] ?? null,
         messageCount: c._count.messages,
         archivedAt: c.archivedAt,
@@ -586,7 +589,7 @@ export class ChatService {
   async ensureConversation(
     userId: string,
     workspaceId: string,
-    dto: { conversationId?: string; agentId?: string; modelId?: string; providerId?: string },
+    dto: { conversationId?: string; agentId?: string; modelId?: string; modelProvider?: string },
   ): Promise<{ conversationId: string; isNew: boolean }> {
     if (dto.conversationId) {
       await this.findOwnedConversation(dto.conversationId, userId);
@@ -596,7 +599,7 @@ export class ChatService {
     const conversation = await this.createConversation(userId, workspaceId, {
       agentId: dto.agentId,
       modelId: dto.modelId,
-      providerId: dto.providerId,
+      modelProvider: dto.modelProvider,
     });
     return { conversationId: conversation.id, isNew: true };
   }
@@ -709,7 +712,7 @@ export class ChatService {
         const path = this.buildMessagePath(all, conv?.activeLeafMessageId ?? null);
         return path.slice(0, 4).map((m) => ({ role: m.role, content: m.content }));
       })
-      .then((messages) => this.providerService.generateTitle(messages))
+      .then((messages) => this.llmService.generateTitle(messages))
       .then(async (title) => {
         if (title && title !== 'New Conversation') {
           await this.prisma.conversation.update({

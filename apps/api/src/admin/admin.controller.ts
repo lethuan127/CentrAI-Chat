@@ -34,7 +34,7 @@ import {
   AnalyticsOverviewSchema,
   UsageTrendPointSchema,
   SystemSettingsSchema,
-  ProviderHealthSchema,
+  LlmBackendHealthSchema,
 } from '../common/swagger/schemas';
 import { apiEnvelopeSchema } from '../common/swagger/zod-to-openapi';
 
@@ -162,19 +162,19 @@ export class AdminController {
     return { data: settings, error: null };
   }
 
-  // ─── Provider Health ──────────────────────────────────────
+  // ─── LLM backend health (env credentials) ─────────────────
 
-  @Get('providers/health')
-  @ApiOperation({ summary: 'Get provider health status (admin only)' })
+  @Get('llm/health')
+  @ApiOperation({ summary: 'Check connectivity for LLM backends configured via environment (admin only)' })
   @ApiResponse({
     status: 200,
-    description: 'Provider health data',
-    schema: apiEnvelopeSchema({ type: 'array', items: ProviderHealthSchema }),
+    description: 'Per-backend health from API environment variables',
+    schema: apiEnvelopeSchema({ type: 'array', items: LlmBackendHealthSchema }),
   })
-  async getProviderHealth(
+  async getLlmBackendHealth(
     @CurrentUser() user: { workspaceId: string },
   ) {
-    const health = await this.adminService.getProviderHealth(user.workspaceId);
+    const health = await this.adminService.getLlmBackendHealth(user.workspaceId);
     return { data: health, error: null };
   }
 }

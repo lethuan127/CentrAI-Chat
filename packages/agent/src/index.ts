@@ -1,53 +1,30 @@
-export { AgentRuntimeError } from './errors.js';
+/**
+ * Public surface aligned with `docs/architecture.md` §7.
+ */
+export type { RuntimeAgentDefinition } from './domain/agent-definition.js';
+export { runtimeAgentDefinitionFromPersisted, type PersistedAgentLike } from './build/from-persistence.js';
 export {
-  COMPILED_RUN_PLAN_VERSION,
-  type CompiledRunPlan,
-  type CompiledRunPlanLimits,
-  type CompiledRunPlanMemory,
-} from './compile/compiled-run-plan.js';
-export { type RequestContext } from './compile/request-context.js';
+  buildSystemPrompt,
+  mergeSessionIntoSystemPrompt,
+} from './prompts/system-prompt.js';
+export { mergeSessionIntoSystemPrompt as mergeRunContext } from './prompts/system-prompt.js';
 export {
-  mergeRunContext,
-  runtimeAgentDefinitionFromPersisted,
-  systemPromptFromDefinition,
-  type MergeRunContextOptions,
-  type RuntimeAgentDefinition,
-} from './build/index.js';
-export {
-  appendMessages,
-  sliceMessageHistory,
-  type ChatMessage,
-  type ChatRole,
-  type SliceHistoryOptions,
-} from './domain/message.js';
-export { buildSystemPrompt } from './domain/prompt.js';
-export { formatSessionStateBlock, type SessionState } from './domain/session-state.js';
-export {
-  flattenRuntimeTools,
-  jsonParametersSchema,
-  parseRuntimeTools,
-  runtimeToolSchema,
-  type RuntimeFunctionTool,
-  type RuntimeMcpTool,
-  type RuntimeToolkitTool,
-  type RuntimeTool,
-} from './domain/tool-spec.js';
-export { type ToolInvocationCall, type ToolInvocationHandler } from './tools/invocation-router.js';
-export {
-  CENTRAI_MASTRA_PG_STORE_ID,
-  CENTRAI_UI_STREAM_VERSION,
   createCentrAiChatStream,
-  createCentrAiPostgresStore,
-  createRuntimeAdapter,
-  mastraAgentRuntimeAdapter,
-  type AdapterDeps,
-  type AgentRuntimeAdapter,
-  type AgentRuntimeId,
   type CentrAiChatMemoryScope,
   type CentrAiChatStreamParams,
   type CentrAiChatStreamResult,
-  type CreateCentrAiPostgresStoreOptions,
-  type CreateRuntimeAdapterOptions,
-  type PostgresStore,
   type StreamRunResult,
-} from './runtime/index.js';
+} from './runtime/stream-run.js';
+export {
+  createMastraAgent,
+  type CreateMastraAgentParams,
+  type MastraAgentFactoryDeps,
+} from './build/mastra-agent.factory.js';
+export {
+  createMastraTools,
+  type CreateMastraToolsContext,
+  type ToolProvider,
+  type ToolProviderRegistry,
+} from './build/mastra-tool.factory.js';
+export { createToolProviderRegistry, registerToolProvider } from './build/tool-provider.registry.js';
+export { AgentRuntimeError, ToolProviderNotFoundError } from './runtime/errors.js';
