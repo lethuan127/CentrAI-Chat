@@ -4,10 +4,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma';
+import { getToolkitCatalog } from '@centrai/agent';
 import type {
   CreateAgentDto,
   UpdateAgentDto,
   AgentQueryDto,
+  ToolkitInfo,
 } from '@centrai/types';
 import { AgentStatus } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -284,6 +286,15 @@ export class AgentService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+  }
+
+  /**
+   * Returns the static toolkit catalog — the list of built-in tools that can
+   * be attached to an agent. This is derived from the agent package's
+   * `TOOLKIT_CATALOG` and does not require a database query.
+   */
+  listAvailableTools(): ToolkitInfo[] {
+    return getToolkitCatalog();
   }
 
   async findPublished(workspaceId: string) {

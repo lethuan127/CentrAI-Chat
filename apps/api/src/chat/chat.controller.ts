@@ -32,7 +32,7 @@ import type {
   UpdateActiveLeafDto,
   EditUserMessageDto,
 } from '@centrai/types';
-import { createCentrAiChatStream, createMastraAgent, buildSystemPrompt, mergeRunContext } from '@centrai/agent';
+import { createCentrAiChatStream, createMastraAgent } from '@centrai/agent';
 import {
   createUIMessageStream,
   pipeUIMessageStreamToResponse,
@@ -413,9 +413,9 @@ export class ChatController {
       modelProvider,
     );
 
-    const sessionPreamble = await this.chatService.buildChatSessionPreamble(user.id, clientTimeZone);
-    const baseInstructions = buildSystemPrompt(definition);
-    const instructions = mergeRunContext(baseInstructions, sessionPreamble);
+    const sessionState = definition.addSessionStateToContext
+      ? await this.chatService.buildChatSessionState(user.id, clientTimeZone)
+      : {};
 
     const uiMessages: UIMessage[] = (messages ?? []) as UIMessage[];
     const modelMessages = await convertToModelMessages(uiMessages);
@@ -432,7 +432,6 @@ export class ChatController {
     const agent = await createMastraAgent({
       definition,
       model,
-      instructionsOverride: instructions,
     });
 
     // Step 2 (architecture §3): stream — Agent.stream → toAISdkStream.
@@ -441,6 +440,7 @@ export class ChatController {
       agent,
       messages: modelMessages,
       abortSignal: abortController.signal,
+      requestContext: Object.keys(sessionState).length > 0 ? sessionState : undefined,
     });
 
     const stream = createUIMessageStream({

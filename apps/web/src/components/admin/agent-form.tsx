@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { X } from 'lucide-react';
+import { AlertCircle, Check, X } from 'lucide-react';
 import { LLM_BACKEND_LABELS, LLM_MODEL_CATALOG, type ProviderTypeKey } from '@centrai/types';
+import type { ToolkitInfo } from '@centrai/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { useAgents } from '@/hooks/use-agents';
 import type { AgentListItem } from '@/hooks/use-agents';
+import { apiClient } from '@/lib/api-client';
 
 const BACKEND_ORDER: ProviderTypeKey[] = ['openai', 'anthropic', 'google', 'ollama', 'custom'];
 
@@ -65,6 +67,26 @@ export function AgentForm({ agent }: AgentFormProps) {
   const [tags, setTags] = useState<string[]>(agent?.tags ?? []);
   const [changelog, setChangelog] = useState('');
 
+  // Tools — stored as { name: string }[] in the DB; we track selected names locally.
+  const initialToolNames = useMemo(
+    () =>
+      (agent?.tools ?? [])
+        .filter((t): t is { name: string } => typeof t === 'object' && t !== null && 'name' in t)
+        .map((t) => t.name),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const [selectedTools, setSelectedTools] = useState<string[]>(initialToolNames);
+  const [availableToolkits, setAvailableToolkits] = useState<ToolkitInfo[]>([]);
+
+  useEffect(() => {
+    apiClient.get<ToolkitInfo[]>('/agents/tools').then((res) => {
+      setAvailableToolkits(res.data ?? []);
+    }).catch(() => {
+      // silently ignore; tools section will just be empty
+    });
+  }, []);
+
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +129,7 @@ export function AgentForm({ agent }: AgentFormProps) {
         maxTurnsMessageHistory: maxTurnsMessageHistory ? parseInt(maxTurnsMessageHistory, 10) : undefined,
         enableSessionSummaries,
         tags,
+        tools: selectedTools.map((name) => ({ name })),
       };
 
       if (isEditing && agent) {
@@ -380,6 +403,61 @@ export function AgentForm({ agent }: AgentFormProps) {
           </p>
         </div>
       </fieldset>
+
+      {availableToolkits.length > 0 && (
+        <fieldset className="space-y-3 rounded-lg border border-border p-4">
+          <legend className="px-2 text-sm font-medium">Tools</legend>
+          <p className="text-xs text-muted-foreground">
+            Select toolkits to enable for this agent. Each toolkit injects its own instructions and callable functions into the agent.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {availableToolkits.map((toolkit) => {
+              const active = selectedTools.includes(toolkit.name);
+              return (
+                <button
+                  key={toolkit.name}
+                  type="button"
+                  onClick={() =>
+                    setSelectedTools((prev) =>
+                      active ? prev.filter((n) => n !== toolkit.name) : [...prev, toolkit.name],
+                    )
+                  }
+                  className={[
+                    'relative flex flex-col gap-1.5 rounded-lg border p-3 text-left transition-colors',
+                    active
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border bg-background hover:border-border/80 hover:bg-muted/30',
+                  ].join(' ')}
+                >
+                  {active && (
+                    <span className="absolute right-2.5 top-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="h-2.5 w-2.5" />
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2 pr-6">
+                    <span className="text-sm font-medium">{toolkit.displayName}</span>
+                    <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                      {toolkit.category}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{toolkit.description}</p>
+                  {toolkit.requiredEnvVars && toolkit.requiredEnvVars.length > 0 && (
+                    <div className="mt-1 flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                      <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                      <span>Requires: {toolkit.requiredEnvVars.join(', ')}</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {selectedTools.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {selectedTools.length} toolkit{selectedTools.length !== 1 ? 's' : ''} enabled.
+            </p>
+          )}
+        </fieldset>
+      )}
 
       <div className="space-y-2">
         <label htmlFor="tagInput" className="text-sm font-medium">

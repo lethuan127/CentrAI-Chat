@@ -28,3 +28,8 @@ export {
 } from './build/mastra-tool.factory.js';
 export { createToolProviderRegistry, registerToolProvider } from './build/tool-provider.registry.js';
 export { AgentRuntimeError, ToolProviderNotFoundError } from './runtime/errors.js';
+export { FirecrawlTools } from './tools/index.js';
+export type { FirecrawlToolsConfig } from './tools/index.js';
+export { CentrAITools } from './tools/index.js';
+export { getToolkitCatalog, TOOLKIT_CATALOG } from './tools/index.js';
+export type { ToolkitCatalogEntry, ToolkitInfo } from './tools/index.js';

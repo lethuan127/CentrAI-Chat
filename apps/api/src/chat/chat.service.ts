@@ -43,24 +43,22 @@ export class ChatService {
   }
 
   /**
-   * Session block prepended to the model system instructions: user name/email from the DB,
-   * client time zone, and "now" formatted in that zone (server clock).
+   * Session key-value pairs prepended to the model system instructions.
+   * Returns a plain record so callers can forward it verbatim as `requestContext`.
    */
-  async buildChatSessionPreamble(userId: string, clientTimeZoneRaw?: unknown): Promise<string> {
+  async buildChatSessionState(userId: string, clientTimeZoneRaw?: unknown): Promise<Record<string, string>> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
       select: { name: true, email: true },
     });
     if (!user) {
-      return '';
+      return {};
     }
 
-    const displayName = user.name?.trim() || 'Not set';
-    const lines: string[] = [
-      '[Session context — use for user- and time-aware replies; do not recite unless relevant]',
-      `- User name: ${displayName}`,
-      `- User email: ${user.email}`,
-    ];
+    const ctx: Record<string, string> = {
+      'User name': user.name?.trim() || 'Not set',
+      'User email': user.email,
+    };
 
     const tz = this.sanitizeClientTimeZone(clientTimeZoneRaw);
     const now = new Date();
@@ -79,18 +77,16 @@ export class ChatService {
           hour12: true,
           timeZoneName: 'short',
         }).format(now);
-        lines.push(`- User local timezone: ${tz}`);
-        lines.push(`- Current time in user's timezone: ${localTime}`);
+        ctx['User timezone'] = tz;
+        ctx['Current time'] = localTime;
       } catch {
-        lines.push('- User local timezone: (invalid; ignored)');
-        lines.push(`- Current time (UTC, ISO): ${now.toISOString()}`);
+        ctx['Current time (UTC)'] = now.toISOString();
       }
     } else {
-      lines.push('- User local timezone: (not provided)');
-      lines.push(`- Current time (UTC, ISO): ${now.toISOString()}`);
+      ctx['Current time (UTC)'] = now.toISOString();
     }
 
-    return lines.join('\n');
+    return ctx;
   }
 
   // ─── Conversation CRUD ──────────────────────────────────────

@@ -6,6 +6,7 @@ import type {
   CreateAgentDto,
   UpdateAgentDto,
   AgentQueryDto,
+  ToolkitInfo,
 } from '@centrai/types';
 
 interface Envelope<T> { data: T; error: null; meta?: Record<string, unknown> }
@@ -25,6 +26,16 @@ export class AgentsResource {
 
   async listPublished(): Promise<PublishedAgent[]> {
     const res = await this.client.request<Envelope<PublishedAgent[]>>('GET', '/agents/published');
+    return res.data;
+  }
+
+  /**
+   * Returns the catalog of built-in toolkits that can be attached to an agent.
+   * Use `name` from each entry as the value stored in `tools[].name` when
+   * creating or updating an agent.
+   */
+  async listTools(): Promise<ToolkitInfo[]> {
+    const res = await this.client.request<Envelope<ToolkitInfo[]>>('GET', '/agents/tools');
     return res.data;
   }
 

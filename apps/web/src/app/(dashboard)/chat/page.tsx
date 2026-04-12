@@ -75,6 +75,20 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import {
+  Reasoning,
+  ReasoningTrigger,
+  ReasoningContent,
+} from '@/components/ai-elements/reasoning';
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+  ToolInput,
+  ToolOutput,
+  type ToolPart,
+} from '@/components/ai-elements/tool';
+import type { DynamicToolUIPart } from 'ai';
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -204,10 +218,31 @@ function ChatMessageItem({
   showBranchAction?: boolean;
   onBranch?: () => void;
 }) {
-  const text = getMessageText(message);
-  const isAssistantStreaming = isStreaming && message.role === 'assistant';
-
   const isAssistant = message.role === 'assistant';
+  const isAssistantStreaming = isStreaming && isAssistant;
+  const text = getMessageText(message);
+
+  // Collect reasoning parts (thinking blocks from extended-thinking models)
+  const reasoningParts = message.parts.filter(
+    (p): p is { type: 'reasoning'; reasoning: string } => p.type === 'reasoning',
+  );
+
+  // Collect tool-call parts — both statically-typed ("tool-<name>") and dynamic ("dynamic-tool")
+  const toolParts = message.parts.filter(
+    (p): p is ToolPart =>
+      p.type === 'dynamic-tool' ||
+      (p.type !== 'text' && p.type !== 'reasoning' && p.type.startsWith('tool-')),
+  );
+
+  // Reasoning is still live while the assistant is streaming and no text has arrived yet
+  const isReasoningStreaming = isAssistantStreaming && text.length === 0;
+
+  // Only show the bare "Thinking…" shimmer when nothing else is visible yet
+  const showThinkingShimmer =
+    isAssistantStreaming &&
+    text.length === 0 &&
+    reasoningParts.length === 0 &&
+    toolParts.length === 0;
 
   return (
     <Message
@@ -237,25 +272,65 @@ function ChatMessageItem({
       >
         {message.role === 'user' ? (
           <p className="whitespace-pre-wrap">{text}</p>
-        ) : text ? (
-          <MessageResponse
-            isAnimating={isAssistantStreaming}
-            className={cn(
-              'text-[15px] leading-7 text-[#0d0d0d] [&>*:first-child]:mt-0',
-              '[&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-[#0d0d0d]',
-              '[&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:flex [&_h3]:items-center [&_h3]:gap-2 [&_h3]:text-base [&_h3]:font-semibold',
-              '[&_h3]:before:inline-block [&_h3]:before:h-2 [&_h3]:before:w-2 [&_h3]:before:rotate-45 [&_h3]:before:bg-[#2e6efb]',
-              '[&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-neutral-200 [&_pre]:bg-[#f7f7f8] [&_pre]:p-4',
-              '[&_code]:text-[13px] [&_li]:my-1 [&_strong]:font-semibold',
+        ) : (
+          <>
+            {/* Reasoning / thinking blocks */}
+            {reasoningParts.length > 0 && (
+              <Reasoning isStreaming={isReasoningStreaming}>
+                <ReasoningTrigger />
+                <ReasoningContent>
+                  {reasoningParts.map((p) => p.reasoning).join('\n\n')}
+                </ReasoningContent>
+              </Reasoning>
             )}
-          >
-            {text}
-          </MessageResponse>
-        ) : isAssistantStreaming ? (
-          <span className={cn('text-sm', CG.muted)}>
-            <Shimmer duration={1}>Thinking...</Shimmer>
-          </span>
-        ) : null}
+
+            {/* Tool call progress */}
+            {toolParts.map((part, i) =>
+              part.type === 'dynamic-tool' ? (
+                <Tool key={i}>
+                  <ToolHeader
+                    type={(part as DynamicToolUIPart).type}
+                    state={(part as DynamicToolUIPart).state}
+                    toolName={(part as DynamicToolUIPart).toolName}
+                  />
+                  <ToolContent>
+                    <ToolInput input={part.input} />
+                    <ToolOutput output={part.output} errorText={part.errorText} />
+                  </ToolContent>
+                </Tool>
+              ) : (
+                <Tool key={i}>
+                  <ToolHeader type={part.type as `tool-${string}`} state={part.state} />
+                  <ToolContent>
+                    <ToolInput input={part.input} />
+                    <ToolOutput output={part.output} errorText={part.errorText} />
+                  </ToolContent>
+                </Tool>
+              ),
+            )}
+
+            {/* Main response text */}
+            {text ? (
+              <MessageResponse
+                isAnimating={isAssistantStreaming}
+                className={cn(
+                  'text-[15px] leading-7 text-[#0d0d0d] [&>*:first-child]:mt-0',
+                  '[&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-[#0d0d0d]',
+                  '[&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:flex [&_h3]:items-center [&_h3]:gap-2 [&_h3]:text-base [&_h3]:font-semibold',
+                  '[&_h3]:before:inline-block [&_h3]:before:h-2 [&_h3]:before:w-2 [&_h3]:before:rotate-45 [&_h3]:before:bg-[#2e6efb]',
+                  '[&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-neutral-200 [&_pre]:bg-[#f7f7f8] [&_pre]:p-4',
+                  '[&_code]:text-[13px] [&_li]:my-1 [&_strong]:font-semibold',
+                )}
+              >
+                {text}
+              </MessageResponse>
+            ) : showThinkingShimmer ? (
+              <span className={cn('text-sm', CG.muted)}>
+                <Shimmer duration={1}>Thinking...</Shimmer>
+              </span>
+            ) : null}
+          </>
+        )}
       </MessageContent>
     </Message>
   );

@@ -98,6 +98,38 @@ export class AgentController {
     return { data: agents, error: null };
   }
 
+  @Get('tools')
+  @Roles(Role.ADMIN, Role.DEVELOPER)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'List available built-in toolkits (admin/developer)',
+    description:
+      'Returns the static catalog of toolkits that can be attached to an agent ' +
+      'during agent design. Each entry includes the registry name to store in ' +
+      '`tools`, a display label, description, and required env vars.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Toolkit catalog',
+    schema: apiEnvelopeSchema({
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', example: 'web-search' },
+          displayName: { type: 'string', example: 'Web Search' },
+          description: { type: 'string' },
+          category: { type: 'string', example: 'Web' },
+          requiredEnvVars: { type: 'array', items: { type: 'string' }, nullable: true },
+        },
+      },
+    }),
+  })
+  listTools() {
+    const tools = this.agentService.listAvailableTools();
+    return { data: tools, error: null };
+  }
+
   @Get(':id')
   @Roles(Role.ADMIN, Role.DEVELOPER)
   @ApiBearerAuth('bearer')

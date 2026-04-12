@@ -116,7 +116,28 @@ export const editUserMessageSchema = z.object({
 
 export type EditUserMessageDto = z.infer<typeof editUserMessageSchema>;
 
-// ─── Agent DTOs ──────────────────────────────────────────────
+// ─── Agent Tool Catalog ──────────────────────────────────────
+
+/**
+ * UI-safe description of a built-in agent toolkit.
+ * Returned by `GET /agents/tools` so the frontend can render the tool picker.
+ */
+export interface ToolkitInfo {
+  /** Stable registry key stored in `Agent.tools[].name`. */
+  name: string;
+  /** Human-readable label for the UI tool picker. */
+  displayName: string;
+  /** One-sentence description shown in the UI. */
+  description: string;
+  /** UI grouping category (e.g. `"Web"`, `"Productivity"`). */
+  category: string;
+  /**
+   * Environment variable names the toolkit requires to function.
+   * The UI can use this to show a config warning when vars are absent.
+   */
+  requiredEnvVars?: string[];
+}
+
 
 export const createAgentSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
