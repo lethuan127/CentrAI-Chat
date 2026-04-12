@@ -24,6 +24,11 @@ import type { Tool as MastraTool } from '@mastra/core/tools';
  */
 export abstract class CentrAITools {
   /**
+   * Name of the toolkit.
+   */
+  abstract readonly name: string;
+
+  /**
    * Human-readable instructions for the LLM describing this toolkit's purpose
    * and usage guidelines. Injected into the agent system prompt.
    */

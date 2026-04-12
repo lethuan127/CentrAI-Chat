@@ -1,3 +1,5 @@
+import Handlebars from 'handlebars';
+
 import { Agent } from '@mastra/core/agent';
 import type { ToolsInput } from '@mastra/core/agent';
 import type { Tool as MastraTool } from '@mastra/core/tools';
@@ -5,6 +7,7 @@ import type { Tool as MastraTool } from '@mastra/core/tools';
 import type { CentrAITools } from '../tools/centrai-tools.js';
 import { resolveToolkitsFromRefs } from '../tools/toolkit-catalog.js';
 import type { RuntimeAgentDefinition } from '../domain/agent-definition.js';
+import { buildTemplateData, type RequestContextLike } from '../domain/request-context-vars.js';
 import { buildSystemPrompt } from '../prompts/system-prompt.js';
 import { createMastraTools, type CreateMastraToolsContext } from './mastra-tool.factory.js';
 
@@ -42,9 +45,10 @@ export type MastraAgentFactoryDeps = CreateMastraAgentParams;
  * 2. Remaining names are resolved via the {@link ToolProviderRegistry} in
  *    `toolContext` (individual single-function tools).
  *
- * The agent's `instructions` are a dynamic function so that a per-request
- * session preamble (e.g. user timezone, preferences) can be injected at stream
- * time via {@link CENTRAI_SESSION_PREAMBLE_KEY} in the Mastra `RequestContext`.
+ * The agent's `instructions` are compiled as a **Handlebars template** at
+ * construction time and rendered per-request using the Mastra `RequestContext`.
+ * Admin-authored instructions can reference any {@link CENTRAI_CONTEXT_VAR}
+ * key — e.g. `"You are helping {{USER_NAME}} ({{USER_EMAIL}})."`.
  */
 export async function createMastraAgent(
   params: CreateMastraAgentParams,
@@ -88,12 +92,15 @@ export async function createMastraAgent(
     tools = { ...toolkitTools, ...(tools ?? {}) };
   }
 
-  // ── Step 4: build static base prompt (tools known at construction time) ───
+  // ── Step 4: compile base prompt as Handlebars template (once at construction) ──
   const baseInstructions = buildSystemPrompt(
     params.definition,
     tools as Record<string, MastraTool> | undefined,
     allToolkits,
   );
+
+  // noEscape: true — instructions are plain text, not HTML.
+  const renderInstructions = Handlebars.compile(baseInstructions, { noEscape: true });
 
   const id = params.agentId ?? params.definition.name ?? 'centrai-agent';
   const name = params.name ?? params.definition.name ?? 'Agent';
@@ -101,19 +108,11 @@ export async function createMastraAgent(
   return new Agent({
     id,
     name,
-    // Dynamic instructions: format all RequestContext entries as a session
-    // preamble block and prepend it to the static base prompt.
-    instructions: ({ requestContext }) => {
-      if (!requestContext) return baseInstructions;
-      const entries = [...requestContext.entries()] as [string, unknown][];
-      if (entries.length === 0) return baseInstructions;
-
-      const preambleLines = [
-        '[Session context — use for user- and time-aware replies; do not recite unless relevant]',
-        ...entries.map(([k, v]) => `- ${k}: ${v}`),
-      ];
-      return `${baseInstructions}\n\n${preambleLines.join('\n')}`;
-    },
+    // Render the Handlebars instruction template with per-request context data.
+    // {{USER_NAME}}, {{CONVERSATION_ID}}, etc. are replaced at stream time.
+    // Instructions with no template variables render as-is (backward-compatible).
+    instructions: ({ requestContext }) =>
+      renderInstructions(buildTemplateData(requestContext as RequestContextLike | null)),
     model: params.model as ConstructorParameters<typeof Agent>[0]['model'],
     ...(tools != null && Object.keys(tools).length > 0 ? { tools } : {}),
     ...(params.memory != null ? { memory: params.memory } : {}),

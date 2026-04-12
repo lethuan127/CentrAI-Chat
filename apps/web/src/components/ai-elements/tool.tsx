@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
   CollapsibleContent,
@@ -44,15 +43,15 @@ export type ToolHeaderProps = {
     }
 );
 
-const statusLabels: Record<ToolPart["state"], string> = {
-  "approval-requested": "Awaiting Approval",
-  "approval-responded": "Responded",
-  "input-available": "Running",
-  "input-streaming": "Pending",
-  "output-available": "Completed",
-  "output-denied": "Denied",
-  "output-error": "Error",
-};
+// const statusLabels: Record<ToolPart["state"], string> = {
+//   "approval-requested": "Awaiting Approval",
+//   "approval-responded": "Responded",
+//   "input-available": "Running",
+//   "input-streaming": "Pending",
+//   "output-available": "Completed",
+//   "output-denied": "Denied",
+//   "output-error": "Error",
+// };
 
 const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
@@ -64,12 +63,8 @@ const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "output-error": <XCircleIcon className="size-4 text-red-600" />,
 };
 
-export const getStatusBadge = (status: ToolPart["state"]) => (
-  <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
-    {statusIcons[status]}
-    {statusLabels[status]}
-  </Badge>
-);
+export const getStatusBadge = (status: ToolPart["state"]) =>
+  statusIcons[status];
 
 export const ToolHeader = ({
   className,

@@ -32,7 +32,7 @@ import type {
   UpdateActiveLeafDto,
   EditUserMessageDto,
 } from '@centrai/types';
-import { createCentrAiChatStream, createMastraAgent } from '@centrai/agent';
+import { createCentrAiChatStream, createMastraAgent, CENTRAI_CONTEXT_VAR } from '@centrai/agent';
 import {
   createUIMessageStream,
   pipeUIMessageStreamToResponse,
@@ -244,6 +244,26 @@ export class ChatController {
     res.send(result.content);
   }
 
+  private async buildChatRequestContext(
+    req: Request,
+    userId: string,
+    conversationId: string,
+  ): Promise<Record<string, unknown>> {
+    const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '') || undefined;
+    const profile = await this.chatService.getUserBasicProfile(userId);
+
+    const ctx: Record<string, unknown> = {
+      [CENTRAI_CONTEXT_VAR.USER_ID]: userId,
+      [CENTRAI_CONTEXT_VAR.CONVERSATION_ID]: conversationId,
+    };
+
+    if (token) ctx[CENTRAI_CONTEXT_VAR.USER_ACCESS_TOKEN] = token;
+    if (profile?.name) ctx[CENTRAI_CONTEXT_VAR.USER_NAME] = profile.name;
+    if (profile?.email) ctx[CENTRAI_CONTEXT_VAR.USER_EMAIL] = profile.email;
+
+    return ctx;
+  }
+
   private async persistMessageParts(
     convId: string,
     assistantMessageId: string,
@@ -428,9 +448,7 @@ export class ChatController {
       modelProvider,
     );
 
-    const sessionState = definition.addSessionStateToContext
-      ? await this.chatService.buildChatSessionState(user.id, clientTimeZone)
-      : {};
+    const requestContext = await this.buildChatRequestContext(req, user.id, convId)
 
     const uiMessages: UIMessage[] = (messages ?? []) as UIMessage[];
     const modelMessages = await convertToModelMessages(uiMessages);
@@ -458,7 +476,7 @@ export class ChatController {
       agent,
       messages: modelMessages,
       abortSignal: abortController.signal,
-      requestContext: Object.keys(sessionState).length > 0 ? sessionState : undefined,
+      requestContext,
     });
 
     const stream = createUIMessageStream({

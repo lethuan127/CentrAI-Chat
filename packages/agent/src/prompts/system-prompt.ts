@@ -31,12 +31,15 @@ export function buildSystemPrompt(
   }
 
   sections.push('');
+  sections.push('<instructions>');
   sections.push(definition.instructions.trim());
+  sections.push('</instructions>');
 
   if (definition.expectedOutput?.trim()) {
     sections.push('');
-    sections.push('Expected output style:');
+    sections.push('<expected-output>');
     sections.push(definition.expectedOutput.trim());
+    sections.push('</expected-output>');
   }
 
   const toolEntries = resolvedTools ? Object.values(resolvedTools) : [];
@@ -50,7 +53,9 @@ export function buildSystemPrompt(
         const inst = toolkit.instructions.trim();
         if (inst) {
           sections.push('');
+          sections.push(`<toolkit-${toolkit.name}>`);
           sections.push(inst);
+          sections.push(`</toolkit-${toolkit.name}>`);
         }
       }
     }
@@ -65,21 +70,28 @@ export function buildSystemPrompt(
     const block = formatSessionStateBlock(definition.sessionState);
     if (block) {
       sections.push('');
-      sections.push('Session context (JSON):');
+      sections.push('<session-context>');
       sections.push(block);
+      sections.push('</session-context>');
     } else {
       sections.push('');
-      sections.push(
-        'When session context is provided by the application, incorporate it naturally without repeating it verbatim unless helpful.',
-      );
+      sections.push('<session-context>');
+      sections.push('When session context is provided by the application, incorporate it naturally without repeating it verbatim unless helpful.');
+      sections.push('</session-context>');
     }
   }
 
+  const additionalInstructions = [];
+
   if (definition.maxTurnsMessageHistory != null) {
+    additionalInstructions.push(`Prefer focusing on recent dialogue; message history may be trimmed to roughly the last ${definition.maxTurnsMessageHistory} user turns.`);
+  }
+
+  if (additionalInstructions.length > 0) {
     sections.push('');
-    sections.push(
-      `Prefer focusing on recent dialogue; message history may be trimmed to roughly the last ${definition.maxTurnsMessageHistory} user turns.`,
-    );
+    sections.push('<additional-instructions>');
+    sections.push(additionalInstructions.join('\n'));
+    sections.push('</additional-instructions>');
   }
 
   return sections.join('\n');

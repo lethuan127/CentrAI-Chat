@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "centrai-demo": {
+            "type": "streamable-http",
+            "url": "http://localhost:8016/mcp",
+            "headers": {
+                "Authorization": "Bearer {{USER_ACCESS_TOKEN}}",
+                "X-User-ID": "{{USER_ID}}",
+                "X-User-Email": "{{USER_EMAIL}}"
+            },
+            "timeout": 30000,
+            "serverInstructions": true,
+            "startup": true
+        }
+    }
+}

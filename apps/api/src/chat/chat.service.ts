@@ -11,6 +11,7 @@ import { MessageRole, ContentType, AgentStatus } from '../generated/prisma/enums
 import type { Prisma } from '../generated/prisma/client.js';
 import type { ConversationQueryDto } from '@centrai/types';
 import type { Message as MessageRow } from '../generated/prisma/client.js';
+import { CENTRAI_CONTEXT_VAR } from '@centrai/agent';
 
 @Injectable()
 export class ChatService {
@@ -30,64 +31,6 @@ export class ChatService {
     if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.userId !== userId) throw new ForbiddenException('Not your conversation');
     return conversation;
-  }
-
-  /**
-   * Light validation for browser-reported IANA time zone ids (e.g. America/New_York).
-   */
-  private sanitizeClientTimeZone(raw: unknown): string | null {
-    if (typeof raw !== 'string') return null;
-    const t = raw.trim();
-    if (t.length === 0 || t.length > 120) return null;
-    if (!/^[\w/+.:-]+$/.test(t)) return null;
-    return t;
-  }
-
-  /**
-   * Session key-value pairs prepended to the model system instructions.
-   * Returns a plain record so callers can forward it verbatim as `requestContext`.
-   */
-  async buildChatSessionState(userId: string, clientTimeZoneRaw?: unknown): Promise<Record<string, string>> {
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, deletedAt: null },
-      select: { name: true, email: true },
-    });
-    if (!user) {
-      return {};
-    }
-
-    const ctx: Record<string, string> = {
-      'User name': user.name?.trim() || 'Not set',
-      'User email': user.email,
-    };
-
-    const tz = this.sanitizeClientTimeZone(clientTimeZoneRaw);
-    const now = new Date();
-
-    if (tz) {
-      try {
-        const localTime = new Intl.DateTimeFormat('en-US', {
-          timeZone: tz,
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-          timeZoneName: 'short',
-        }).format(now);
-        ctx['User timezone'] = tz;
-        ctx['Current time'] = localTime;
-      } catch {
-        ctx['Current time (UTC)'] = now.toISOString();
-      }
-    } else {
-      ctx['Current time (UTC)'] = now.toISOString();
-    }
-
-    return ctx;
   }
 
   // ─── Conversation CRUD ──────────────────────────────────────
@@ -796,6 +739,13 @@ export class ChatService {
       orderBy: { createdAt: 'asc' },
       select: { role: true, content: true },
       take: 50,
+    });
+  }
+
+  async getUserBasicProfile(userId: string): Promise<{ name: string | null; email: string } | null> {
+    return this.prisma.user.findFirst({
+      where: { id: userId },
+      select: { name: true, email: true },
     });
   }
 

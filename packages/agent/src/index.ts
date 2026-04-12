@@ -2,6 +2,13 @@
  * Public surface aligned with `docs/architecture.md` §7.
  */
 export type { RuntimeAgentDefinition } from './domain/agent-definition.js';
+export {
+  CENTRAI_CONTEXT_VAR,
+  buildTemplateData,
+  type CentrAIContextVar,
+  type CentrAIContextData,
+  type RequestContextLike,
+} from './domain/request-context-vars.js';
 export { runtimeAgentDefinitionFromPersisted, type PersistedAgentLike } from './build/from-persistence.js';
 export {
   buildSystemPrompt,
@@ -31,5 +38,23 @@ export { AgentRuntimeError, ToolProviderNotFoundError } from './runtime/errors.j
 export { FirecrawlTools } from './tools/index.js';
 export type { FirecrawlToolsConfig } from './tools/index.js';
 export { CentrAITools } from './tools/index.js';
-export { getToolkitCatalog, TOOLKIT_CATALOG } from './tools/index.js';
+export { getToolkitCatalog, TOOLKIT_CATALOG, registerMcpToolkitsFromConfig } from './tools/index.js';
 export type { ToolkitCatalogEntry, ToolkitInfo } from './tools/index.js';
+export {
+  mcpServerConfigSchema,
+  mcpStreamableHttpConfigSchema,
+  mcpSseConfigSchema,
+  mcpStdioConfigSchema,
+  mcpConfigFileSchema,
+  McpCentrAITools,
+  createMcpToolProviders,
+  loadMcpConfig,
+} from './tools/index.js';
+export type {
+  McpServerConfig,
+  McpStreamableHttpConfig,
+  McpSseConfig,
+  McpStdioConfig,
+  McpConfigFile,
+  LoadMcpConfigOptions,
+} from './tools/index.js';

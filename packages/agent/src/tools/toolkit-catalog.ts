@@ -1,5 +1,6 @@
 import type { CentrAITools } from './centrai-tools.js';
 import { FirecrawlTools } from './firecrawl.js';
+import type { McpConfigFile } from './mcp/mcp-server-config.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,6 +82,53 @@ export const TOOLKIT_CATALOG: ToolkitCatalogEntry[] = [
 export function getToolkitCatalog(): ToolkitInfo[] {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return TOOLKIT_CATALOG.map(({ factory: _factory, ...info }) => info);
+}
+
+/**
+ * Connects to every MCP server in `mcpConfig`, fetches their tool manifests,
+ * and registers each server as a `"mcp:<serverName>"` entry in
+ * {@link TOOLKIT_CATALOG}.
+ *
+ * Call **once at application startup** (e.g. in `AppModule.onModuleInit`)
+ * before any agent is constructed. After this call, agents can attach a whole
+ * MCP server by adding `{ name: "mcp:<serverName>" }` to their `toolRefs`.
+ *
+ * The MCP clients are kept connected after registration so that tool
+ * `execute` calls issued during chat turns can reach the server.
+ *
+ * @example
+ * ```ts
+ * // apps/api — NestJS module init
+ * import mcpConfig from '../../../.mcp.json';
+ * import { mcpConfigFileSchema, registerMcpToolkitsFromConfig } from '@centrai/agent';
+ *
+ * await registerMcpToolkitsFromConfig(mcpConfigFileSchema.parse(mcpConfig));
+ * ```
+ */
+export async function registerMcpToolkitsFromConfig(
+  mcpConfig: McpConfigFile,
+): Promise<void> {
+  const { McpCentrAITools } = await import('./mcp/mcp-centrai-tools.js');
+
+  for (const [serverName, serverConfig] of Object.entries(mcpConfig.mcpServers)) {
+    const toolkit = await McpCentrAITools.create(serverName, serverConfig);
+
+    TOOLKIT_CATALOG.push({
+      name: `mcp:${serverName}`,
+      displayName: toTitleCase(serverName),
+      description: `Tools provided by the "${serverName}" MCP server.`,
+      category: 'MCP',
+      factory: () => toolkit,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function toTitleCase(s: string): string {
+  return s.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
